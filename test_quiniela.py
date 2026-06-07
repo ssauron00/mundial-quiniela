@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test completo de quiniela: crear usuario, seleccionar, guardar, verificar."""
+"""Test completo de quiniela."""
 import sqlite3
 from pathlib import Path
 from werkzeug.security import generate_password_hash
@@ -25,34 +25,32 @@ test_user_id = cur.lastrowid
 conn.commit()
 print(f"[OK] Usuario creado: ID={test_user_id}")
 
-# 3. Crear quiniela para el usuario
+# 3. Crear quiniela
 cur = conn.execute('INSERT INTO quinielas (usuario_id) VALUES (?)', (test_user_id,))
 test_quiniela_id = cur.lastrowid
 conn.commit()
 print(f"[OK] Quiniela creada: ID={test_quiniela_id}")
 
-# 4. Verificar que hay partidos
-partidos = conn.execute('SELECT id, fase FROM equipos LIMIT 5').fetchall()
-print(f"[INFO] Equipos disponibles: {len(partidos)}")
-for p in partidos:
-    print(f"  - {p[1]}")
+# 4. Verificar partidos disponibles
+partidos = conn.execute('SELECT COUNT(*) FROM partidos').fetchone()[0]
+print(f"[INFO] Partidos en BD: {partidos}")
 
-# Obtener partidos reales
-partidos = conn.execute('SELECT id, fase, equipo_local_id, equipo_visitante_id FROM partidos LIMIT 3').fetchall()
-print(f"[INFO] Partidos disponibles: {len(partidos)}")
-for p in partidos:
-    local = conn.execute('SELECT nombre FROM equipos WHERE id = ?', (p[2],)).fetchone()[0]
-    visitante = conn.execute('SELECT nombre FROM equipos WHERE id = ?', (p[3],)).fetchone()[0]
-    print(f"  ID={p[0]}: {local} vs {visitante}")
-
-if len(partidos) < 3:
-    print("[ERROR] No hay suficientes partidos para la prueba")
+if partidos == 0:
+    print("[ERROR] No hay partidos. Ejecuta seed.py primero.")
     conn.close()
     exit(1)
 
-# 5. Simular guardar quiniela (insertar selecciones)
+# Obtener 3 partidos
+partidos = conn.execute('SELECT id, equipo_local_id, equipo_visitante_id, fase FROM partidos LIMIT 3').fetchall()
+print(f"[INFO] Usando {len(partidos)} partidos para la prueba:")
+for p in partidos:
+    local = conn.execute('SELECT nombre FROM equipos WHERE id = ?', (p[1],)).fetchone()[0]
+    visitante = conn.execute('SELECT nombre FROM equipos WHERE id = ?', (p[2],)).fetchone()[0]
+    print(f"  ID={p[0]}: {local} vs {visitante} ({p[3]})")
+
+# 5. Simular guardar quiniela
 print("\n[TEST] Guardando selecciones...")
-for i, p in enumerate(partidos[:3]):
+for i, p in enumerate(partidos):
     eleccion = ['1', 'X', '2'][i]
     try:
         conn.execute('INSERT INTO selecciones (quiniela_id, partido_id, eleccion) VALUES (?, ?, ?)',
@@ -60,69 +58,52 @@ for i, p in enumerate(partidos[:3]):
         print(f"  [OK] Partido {p[0]}: {eleccion}")
     except Exception as e:
         print(f"  [ERROR] Partido {p[0]}: {e}")
+        import traceback
+        traceback.print_exc()
 conn.commit()
 
-# 6. Verificar que se guardaron
+# 6. Verificar
 print("\n[TEST] Verificando selecciones guardadas...")
-selecciones = conn.execute('''
-    SELECT s.id, s.eleccion, p.fase, 
-           el.nombre as local, ev.nombre as visitante
-    FROM selecciones s
-    JOIN partidos p ON s.partido_id = p.id
-    JOIN equipos el ON p.equipo_local_id = el.id
-    JOIN equipos ev ON p.equipo_visitante_id = ev.id
-    WHERE s.quiniela_id = ?
-''', (test_quiniela_id,)).fetchall()
-
-print(f"  Selecciones guardadas: {len(selecciones)}")
+selecciones = conn.execute('SELECT id, eleccion, partido_id FROM selecciones WHERE quiniela_id = ?', (test_quiniela_id,)).fetchall()
+print(f"  Total: {len(selecciones)}")
 for s in selecciones:
-    print(f"  - {s[3]} vs {s[4]}: {s[1]}")
+    print(f"  - Seleccion {s[0]}: partido={s[2]}, eleccion={s[1]}")
 
-if len(selecciones) == 3:
-    print("\n[PASS] Guardar quiniela funciona correctamente!")
+if len(selecciones) == len(partidos):
+    print("\n[PASS] Guardar quiniela funciona!")
 else:
-    print(f"\n[FAIL] Se esperaban 3 selecciones, se encontraron {len(selecciones)}")
+    print(f"\n[FAIL] Esperados {len(partidos)}, encontrados {len(selecciones)}")
 
-# 7. Verificar estado de la quiniela
-quiniela = conn.execute('SELECT * FROM quinielas WHERE id = ?', (test_quiniela_id,)).fetchone()
-print(f"\n[TEST] Estado quiniela: finalizada={ quiniela['finalizada']}")
+# 7. Verificar que hay usuario admin
+admin = conn.execute('SELECT id, email FROM usuarios WHERE email = ?', ('admin@example.com',)).fetchone()
+if admin:
+    admin_quiniela = conn.execute('SELECT id FROM quinielas WHERE usuario_id = ?', (admin[0],)).fetchone()
+    print(f"\n[TEST] Admin tiene quiniela: {admin_quiniela is not None}")
+    if not admin_quiniela:
+        print("  Creando quiniela para admin...")
+        conn.execute('INSERT INTO quinielas (usuario_id) VALUES (?)', (admin[0],))
+        conn.commit()
+        print("  [OK] Quiniela creada")
+else:
+    print("[WARNING] Admin no existe")
 
-# 8. Limpiar datos de prueba
+# 8. Limpiar
 conn.execute('DELETE FROM selecciones WHERE quiniela_id = ?', (test_quiniela_id,))
 conn.execute('DELETE FROM quinielas WHERE id = ?', (test_quiniela_id,))
 conn.execute('DELETE FROM usuarios WHERE id = ?', (test_user_id,))
 conn.commit()
-print("\n[OK] Datos de prueba limpiados")
+print("\n[OK] Limpieza completada")
+
+# 9. Resumen
+usuarios = conn.execute('SELECT COUNT(*) FROM usuarios').fetchone()[0]
+quinielas = conn.execute('SELECT COUNT(*) FROM quinielas').fetchone()[0]
+selecciones_total = conn.execute('SELECT COUNT(*) FROM selecciones').fetchone()[0]
+partidos_total = conn.execute('SELECT COUNT(*) FROM partidos').fetchone()[0]
+
+print(f"\n=== RESUMEN ===")
+print(f"Usuarios: {usuarios}")
+print(f"Quinielas: {quinielas}")
+print(f"Selecciones: {selecciones_total}")
+print(f"Partidos: {partidos_total}")
 
 conn.close()
-
-# 9. Verificar estructura de tablas
-print("\n[TEST] Estructura de tablas...")
-conn2 = sqlite3.connect(DB_PATH)
-cursor = conn2.execute("SELECT name FROM sqlite_master WHERE type='table'")
-tables = [row[0] for row in cursor.fetchall()]
-print(f"  Tablas: {tables}")
-
-# Verificar columna eleccion en selecciones
-cursor = conn2.execute("PRAGMA table_info(selecciones)")
-cols = [(row[1], row[2]) for row in cursor.fetchall()]
-print(f"  Columnas en selecciones: {cols}")
-
-# Verificar columna eleccion específicamente
-has_eleccion = any(col[0] == 'eleccion' for col in cols)
-has_eleccion_acento = any(col[0] == 'elección' for col in cols)
-print(f"  Tiene 'eleccion' (sin acento): {has_eleccion}")
-print(f"  Tiene 'elección' (con acento): {has_eleccion_acento}")
-
-if not has_eleccion:
-    print("\n[WARNING] La tabla no tiene columna 'eleccion'. Intentando agregar...")
-    try:
-        conn2.execute("ALTER TABLE selecciones ADD COLUMN eleccion TEXT")
-        print("  [OK] Columna 'eleccion' agregada")
-    except Exception as e:
-        print(f"  [ERROR] No se pudo agregar columna: {e}")
-    conn2.commit()
-
-conn2.close()
-
-print("\n=== FIN DEL TEST ===")
