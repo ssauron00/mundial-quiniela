@@ -257,7 +257,7 @@ def create_app():
                 eleccion = value
                 if eleccion in ('1','X','2'):
                     db.execute('''
-                        INSERT INTO selecciones (quiniela_id, partido_id, elección)
+                        INSERT INTO selecciones (quiniela_id, partido_id, eleccion)
                         VALUES (?, ?, ?)
                     ''', (quiniela_id, partido_id, eleccion))
         db.commit()
@@ -555,9 +555,9 @@ def create_app():
             JOIN quinielas q ON u.id = q.usuario_id
             JOIN selecciones s ON q.id = s.quiniela_id
             JOIN partidos p ON s.partido_id = p.id
-            WHERE (s.elección = '1' AND p.goles_local > p.goles_visitante)
-               OR (s.elección = 'X' AND p.goles_local = p.goles_visitante)
-               OR (s.elección = '2' AND p.goles_local < p.goles_visitante)
+            WHERE (s.eleccion = '1' AND p.goles_local > p.goles_visitante)
+               OR (s.eleccion = 'X' AND p.goles_local = p.goles_visitante)
+               OR (s.eleccion = '2' AND p.goles_local < p.goles_visitante)
             GROUP BY u.id
             ORDER BY aciertos DESC, u.nombre
         ''').fetchall()
@@ -581,9 +581,9 @@ def create_app():
             JOIN quinielas q ON u.id = q.usuario_id
             JOIN selecciones s ON q.id = s.quiniela_id
             JOIN partidos p ON s.partido_id = p.id
-            WHERE (s.elección = '1' AND p.goles_local > p.goles_visitante)
-               OR (s.elección = 'X' AND p.goles_local = p.goles_visitante)
-               OR (s.elección = '2' AND p.goles_local < p.goles_visitante)
+            WHERE (s.eleccion = '1' AND p.goles_local > p.goles_visitante)
+               OR (s.eleccion = 'X' AND p.goles_local = p.goles_visitante)
+               OR (s.eleccion = '2' AND p.goles_local < p.goles_visitante)
             GROUP BY u.id
             ORDER BY aciertos DESC, u.nombre
         ''').fetchall()
