@@ -3,7 +3,7 @@ cd /app
 export FLASK_APP=app.py
 mkdir -p data/img
 
-# Descargar banderas si no existen
+# Descargar banderas
 python3 -c "
 import sqlite3, urllib.request
 from pathlib import Path
@@ -17,7 +17,7 @@ for (url,) in rows:
             urllib.request.urlretrieve(url, str(path))
     except: pass
 db.close()
-print('Banderas descargadas')
+print('Banderas OK')
 "
 
 mkdir -p data
@@ -25,4 +25,8 @@ flask init-db 2>/dev/null
 python3 migrate.py 2>/dev/null
 python3 create_admin.py
 python3 seed.py 2>/dev/null
+
+# Usar PORT de Railway o 5000 por defecto
+PORT=\${PORT:-5000}
+echo "Starting on port \$PORT"
 gunicorn app:app --bind 0.0.0.0:\$PORT --workers 2

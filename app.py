@@ -6,11 +6,19 @@ from io import BytesIO
 
 def create_app():
     app = Flask(__name__)
-    # secret key for session; in production use env var
     app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-me')
     init_app(app)
 
-    # Helper: get setting value
+    # Helper: detectar si es PostgreSQL
+    def is_postgres():
+        return os.environ.get('DATABASE_URL') is not None
+
+    # Helper: ejecutar query compatible SQLite/PostgreSQL
+    def execute(query, params=()):
+        db = get_db()
+        if is_postgres():
+            query = query.replace('?', '%s')
+        return db.execute(query, params)
     def get_setting(key, default='0'):
         db = get_db()
         row = db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
