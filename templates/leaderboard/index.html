@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Leaderboard - Mundial Quiniela{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>🏆 Leaderboard</h2>
+        {% if ranking %}
+        <a href="{{ url_for('leaderboard_chart') }}" class="btn btn-sm" target="_blank">📊 Ver Gráfica</a>
+        {% endif %}
+    </div>
+    <p>Ranking de participantes por aciertos en sus pronósticos.</p>
+
+    {% if ranking %}
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Usuario</th>
+                <th>Aciertos</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in ranking %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ r.nombre }}</td>
+                <td>{{ r.aciertos }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="result-pending">Aún no hay resultados de partidos cargados. El leaderboard se actualizará cuando se registren resultados.</p>
+    {% endif %}
+</div>
+{% endblock %}

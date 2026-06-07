@@ -1,0 +1,34 @@
+fase,fecha,equipo_local,equipo_visitante
+jornada1,2026-06-11 10:00:00,México,Sudáfrica
+jornada1,2026-06-12 10:00:00,Estados Unidos,Paraguay
+jornada1,2026-06-12 13:00:00,Canadá,Bosnia y Herzegovina
+jornada1,2026-06-13 10:00:00,Australia,Turquía
+jornada1,2026-06-13 13:00:00,Brasil,Marruecos
+jornada1,2026-06-14 10:00:00,Costa de Marfil,Ecuador
+jornada1,2026-06-14 13:00:00,Países Bajos,Japón
+jornada1,2026-06-15 10:00:00,Arabia Saudita,Uruguay
+jornada1,2026-06-15 13:00:00,Bélgica,Egipto
+jornada1,2026-06-16 10:00:00,Francia,Senegal
+jornada1,2026-06-16 13:00:00,Argentina,Argelia
+jornada1,2026-06-17 10:00:00,Inglaterra,Croacia
+jornada2,2026-06-18 10:00:00,Suiza,Bosnia y Herzegovina
+jornada2,2026-06-18 13:00:00,México,Corea del Sur
+jornada2,2026-06-19 10:00:00,Turquía,Paraguay
+jornada2,2026-06-19 13:00:00,Estados Unidos,Australia
+jornada2,2026-06-20 10:00:00,Alemania,Costa de Marfil
+jornada2,2026-06-20 13:00:00,Países Bajos,Suecia
+jornada2,2026-06-22 10:00:00,Noruega,Senegal
+jornada2,2026-06-22 13:00:00,Argentina,Austria
+jornada2,2026-06-23 10:00:00,Inglaterra,Ghana
+jornada3,2026-06-24 10:00:00,Escocia,Brasil
+jornada3,2026-06-24 13:00:00,Suiza,Canadá
+jornada3,2026-06-24 16:00:00,Marruecos,Serbia
+jornada3,2026-06-24 19:00:00,República Checa,México
+jornada3,2026-06-25 10:00:00,Ecuador,Alemania
+jornada3,2026-06-25 13:00:00,Japón,Suecia
+jornada3,2026-06-25 16:00:00,Turquía,Estados Unidos
+jornada3,2026-06-25 19:00:00,Paraguay,Australia
+jornada3,2026-06-26 10:00:00,Noruega,Francia
+jornada3,2026-06-26 13:00:00,Uruguay,España
+jornada3,2026-06-27 10:00:00,Croacia,Ghana
+jornada3,2026-06-27 13:00:00,Colombia,Portugal

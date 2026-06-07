@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Mundial Quiniela{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
+</head>
+<body>
+    {% if session.usuario_id %}
+    <nav>
+        <div class="nav-brand">⚽ <span>Mundial</span> Quiniela</div>
+        <div class="menu">
+            {% for grupo, opciones in menu_items.items() %}
+                <div class="menu-group">{{ grupo }}</div>
+                <ul>
+                {% for op in opciones %}
+                    <li><a href="{{ op.ruta }}">{{ op.nombre }}</a></li>
+                {% endfor %}
+                </ul>
+            {% endfor %}
+        </div>
+        <div class="nav-right">
+            <span class="nav-user">{{ session.usuario_nombre }}</span>
+            <a href="{{ url_for('logout') }}" class="nav-logout">Salir</a>
+        </div>
+    </nav>
+    {% endif %}
+    <main>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flashes">
+              {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

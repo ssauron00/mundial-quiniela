@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Mi Quiniela - Mundial Quiniela{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>📝 Mi Quiniela</h2>
+        {% if finalizada %}
+            <span class="badge-finalizada">🔒 Finalizada {{ finalizada_en }}</span>
+        {% else %}
+            <span class="badge-abierta">✏️ Abierta</span>
+        {% endif %}
+    </div>
+
+    {% if not quinielas_activas %}
+    <div class="alert alert-danger" style="margin-bottom:1rem;">
+        🚫 Las quinielas están <strong>desactivadas</strong> por el administrador. No puedes hacer cambios.
+    </div>
+    {% endif %}
+
+    {% if finalizada %}
+    <div class="alert alert-info" style="margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;">
+        <span>Tu quiniela está <strong>finalizada</strong>. Ya no se pueden hacer cambios.</span>
+        {% if quinielas_activas %}
+        <a href="{{ url_for('quiniela_pdf') }}" class="btn btn-pdf btn-sm" target="_blank">📄 Descargar PDF</a>
+        {% endif %}
+    </div>
+    {% elif quinielas_activas %}
+    <p>Elige el resultado de cada partido: <strong style="color:#4ade80">1</strong> = gana local, <strong style="color:#fbbf24">X</strong> = empate, <strong style="color:#60a5fa">2</strong> = gana visitante.</p>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('quiniela_guardar') }}" id="quinielaForm">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Fase</th>
+                    <th>Fecha</th>
+                    <th>Local</th>
+                    <th>Visitante</th>
+                    <th>Tu elección</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in partidos %}
+                <tr>
+                    <td><strong>{{ loop.index }}</strong></td>
+                    <td>{{ p.fase }}</td>
+                    <td>{{ p.fecha }}</td>
+                    <td>
+                        {% if p.bandera_local %}
+                        <img src="{{ p.bandera_local }}" alt="" class="flag-img">
+                        {% endif %}
+                        <strong>{{ p.local }}</strong>
+                    </td>
+                    <td>
+                        {% if p.bandera_visitante %}
+                        <img src="{{ p.bandera_visitante }}" alt="" class="flag-img">
+                        {% endif %}
+                        <strong>{{ p.visitante }}</strong>
+                    </td>
+                    <td>
+                        <div class="radio-group">
+                            <input type="radio" name="partido_{{ p.id }}" value="1" id="p{{ p.id }}_1" {% if p.elección == '1' %}checked{% endif %} {% if finalizada or not quinielas_activas %}disabled{% endif %}>
+                            <label for="p{{ p.id }}_1" class="radio-1">1</label>
+
+                            <input type="radio" name="partido_{{ p.id }}" value="X" id="p{{ p.id }}_x" {% if p.elección == 'X' %}checked{% endif %} {% if finalizada or not quinielas_activas %}disabled{% endif %}>
+                            <label for="p{{ p.id }}_x" class="radio-x">X</label>
+
+                            <input type="radio" name="partido_{{ p.id }}" value="2" id="p{{ p.id }}_2" {% if p.elección == '2' %}checked{% endif %} {% if finalizada or not quinielas_activas %}disabled{% endif %}>
+                            <label for="p{{ p.id }}_2" class="radio-2">2</label>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <br>
+        {% if quinielas_activas and not finalizada %}
+        <button type="submit" class="btn">💾 Guardar quiniela</button>
+        <button type="button" class="btn btn-finalizar" id="btnFinalizar">🔒 Finalizar quiniela</button>
+        {% endif %}
+    </form>
+
+    {% if quinielas_activas and finalizada %}
+    <form method="POST" action="{{ url_for('quiniela_reabrir') }}" style="margin-top:1rem;">
+        <button type="submit" class="btn btn-reabrir" onclick="return confirm('¿Reabrir tu quiniela? Podrás hacer cambios de nuevo.');">🔓 Reabrir quiniela</button>
+    </form>
+    {% endif %}
+</div>
+
+{% if quinielas_activas and not finalizada %}
+<script>
+document.getElementById('btnFinalizar').addEventListener('click', function() {
+    var radios = document.querySelectorAll('input[type="radio"]');
+    var total = radios.length / 3;
+    var seleccionados = document.querySelectorAll('input[type="radio"]:checked').length;
+
+    if (seleccionados < total) {
+        var faltan = total - seleccionados;
+        alert('⚠️ Faltan ' + faltan + ' partido(s) sin seleccionar.\n\nDebes elegir un resultado (1, X o 2) para TODOS los partidos antes de finalizar.');
+        return false;
+    }
+
+    if (!confirm('✅ Todos los partidos están seleccionados.\n\n¿Finalizar tu quiniela?\n\n⚠️ Ya no podrás hacer cambios después.')) {
+        return false;
+    }
+
+    // Primero guardar, luego finalizar
+    var form = document.getElementById('quinielaForm');
+    var formData = new FormData(form);
+
+    fetch("{{ url_for('quiniela_guardar') }}", {
+        method: 'POST',
+        body: formData
+    })
+    .then(function() {
+        // Despues de guardar, enviar el form de finalizar
+        var finalizarForm = document.createElement('form');
+        finalizarForm.method = 'POST';
+        finalizarForm.action = "{{ url_for('quiniela_finalizar') }}";
+        document.body.appendChild(finalizarForm);
+        finalizarForm.submit();
+    })
+    .catch(function() {
+        alert('Error al guardar. Intenta de nuevo.');
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

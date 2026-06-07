@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Bienvenido - Mundial Quiniela{% endblock %}
+{% block content %}
+<div class="welcome-hero">
+    <h1>¡Bienvenido, {{ session.usuario_nombre }}!</h1>
+    <p class="subtitle">Tu quiniela del mundial. Pronostica, compite, gana.</p>
+    <div class="welcome-actions">
+        <a href="{{ url_for('quiniela_hacer') }}" class="btn">📝 Mi Quiniela</a>
+        <a href="{{ url_for('leaderboard') }}" class="btn">🏆 Leaderboard</a>
+        {% if session.usuario_rol == 'admin' %}
+        <a href="{{ url_for('partidos_list') }}" class="btn">⚙️ Partidos</a>
+        <a href="{{ url_for('admin_usuarios_list') }}" class="btn">👥 Usuarios</a>
+        <a href="{{ url_for('admin_settings') }}" class="btn">🔧 Configuración</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

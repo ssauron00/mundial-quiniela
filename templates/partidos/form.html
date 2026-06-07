@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{% if partido %}Editar partido{% else %}Nuevo partido{% endif %} - Mundial Quiniela{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>{% if partido %}✏️ Editar partido{% else %}➕ Nuevo partido{% endif %}</h2>
+    </div>
+    <form method="POST" action="">
+        <div class="form-group">
+            <label for="fase">Fase</label>
+            <input type="text" id="fase" name="fase" required value="{{ partido.fase if partido else '' }}" placeholder="grupos, octavos, cuartas, semifinal, final">
+        </div>
+        <div class="form-group">
+            <label for="fecha">Fecha y hora</label>
+            <input type="datetime-local" id="fecha" name="fecha" required value="{{ partido.fecha if partido else '' }}">
+        </div>
+        <div style="display:flex;gap:1rem;">
+            <div class="form-group" style="flex:1;">
+                <label for="equipo_local">Equipo local</label>
+                <select id="equipo_local" name="equipo_local" required>
+                    <option value="">-- Seleccione --</option>
+                    {% for equipo in equipos %}
+                        <option value="{{ equipo.id }}" {% if partido and equipo.id == partido.equipo_local_id %}selected{% endif %}>{{ equipo.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group" style="flex:1;">
+                <label for="equipo_visitante">Equipo visitante</label>
+                <select id="equipo_visitante" name="equipo_visitante" required>
+                    <option value="">-- Seleccione --</option>
+                    {% for equipo in equipos %}
+                        <option value="{{ equipo.id }}" {% if partido and equipo.id == partido.equipo_visitante_id %}selected{% endif %}>{{ equipo.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div style="display:flex;gap:1rem;">
+            <div class="form-group" style="flex:1;">
+                <label for="goles_local">Goles local</label>
+                <input type="number" id="goles_local" name="goles_local" min="0" value="{{ partido.goles_local if partido and partido.goles_local is not none else '' }}" placeholder="0">
+            </div>
+            <div class="form-group" style="flex:1;">
+                <label for="goles_visitante">Goles visitante</label>
+                <input type="number" id="goles_visitante" name="goles_visitante" min="0" value="{{ partido.goles_visitante if partido and partido.goles_visitante is not none else '' }}" placeholder="0">
+            </div>
+        </div>
+        <button type="submit">💾 Guardar</button>
+        <a href="{{ url_for('partidos_list') }}" class="btn btn-secondary">Cancelar</a>
+    </form>
+</div>
+{% endblock %}
