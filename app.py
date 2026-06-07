@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, g, make_response
-from database import get_db, init_app
+from database import get_db, init_app, DB_PATH
 from auth import login_required, role_required, create_user, get_user_by_email, check_password
 import os
 from io import BytesIO
