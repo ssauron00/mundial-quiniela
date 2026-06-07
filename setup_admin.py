@@ -1,20 +1,16 @@
 #!/usr/bin/env python3
-"""Create or reset admin user."""
+"""Create or reset admin user with quiniela."""
 import sqlite3
 from pathlib import Path
 from werkzeug.security import generate_password_hash
 import sys
 
 DB_PATH = Path('/tmp/mundial.db')
-
-# Also check local path
 if not DB_PATH.exists():
     DB_PATH = Path('data/mundial.db')
 
 if not DB_PATH.exists():
     print("ERROR: Database not found")
-    print(f"  Checked: /tmp/mundial.db")
-    print(f"  Checked: data/mundial.db")
     sys.exit(1)
 
 print(f"Using database: {DB_PATH}")
@@ -31,17 +27,24 @@ if existing:
     conn.execute('UPDATE usuarios SET password_hash=?, nombre=?, rol=? WHERE email=?',
                  (pw_hash, 'Administrador', 'admin', 'admin@example.com'))
     conn.commit()
-    print("=" * 50)
-    print("PASSWORD RESET SUCCESSFULLY")
-    print("=" * 50)
+    user_id = existing[0]
+    print("Admin password reset")
 else:
     # Create new admin
-    conn.execute('INSERT INTO usuarios (email, password_hash, nombre, rol) VALUES (?, ?, ?, ?)',
-                 ('admin@example.com', pw_hash, 'Administrador', 'admin'))
+    cur = conn.execute('INSERT INTO usuarios (email, password_hash, nombre, rol) VALUES (?, ?, ?, ?)',
+                       ('admin@example.com', pw_hash, 'Administrador', 'admin'))
+    user_id = cur.lastrowid
     conn.commit()
-    print("=" * 50)
-    print("ADMIN CREATED SUCCESSFULLY")
-    print("=" * 50)
+    print(f"Admin created with ID: {user_id}")
+
+# Create quiniela for admin if not exists
+existing_quiniela = conn.execute('SELECT id FROM quinielas WHERE usuario_id = ?', (user_id,)).fetchone()
+if not existing_quiniela:
+    conn.execute('INSERT INTO quinielas (usuario_id) VALUES (?)', (user_id,))
+    conn.commit()
+    print("Quiniela created for admin")
+else:
+    print("Quiniela already exists for admin")
 
 # Create settings if not exists
 existing_settings = conn.execute('SELECT key FROM settings WHERE key = ?', ('quinielas_activas',)).fetchone()
@@ -52,22 +55,18 @@ if not existing_settings:
 
 # Verify
 user = conn.execute('SELECT id, email, nombre, rol FROM usuarios WHERE email = ?', ('admin@example.com',)).fetchone()
-print(f"\nUser details:")
-print(f"  ID: {user[0]}")
-print(f"  Email: {user[1]}")
-print(f"  Name: {user[2]}")
-print(f"  Role: {user[3]}")
-
-# Count users and tables
 total_users = conn.execute('SELECT COUNT(*) FROM usuarios').fetchone()[0]
-tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-print(f"\nTotal users: {total_users}")
-print(f"Tables: {[t[0] for t in tables]}")
+quinielas = conn.execute('SELECT COUNT(*) FROM quinielas').fetchone()[0]
+partidos = conn.execute('SELECT COUNT(*) FROM partidos').fetchone()[0]
+
+print(f"\n=== STATUS ===")
+print(f"Admin: {user[1]} (ID: {user[0]})")
+print(f"Total users: {total_users}")
+print(f"Total quinielas: {quinielas}")
+print(f"Total partidos: {partidos}")
 
 conn.close()
 
-print("\n" + "=" * 50)
-print("LOGIN CREDENTIALS:")
-print("  Email: admin@example.com")
-print("  Password: admin123")
-print("=" * 50)
+print("\n=== LOGIN ===")
+print("Email: admin@example.com")
+print("Password: admin123")
