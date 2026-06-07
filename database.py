@@ -23,33 +23,35 @@ def close_db(e=None):
     if db is not None:
         db.close()
 
+def execute_query(query, params=()):
+    db = get_db()
+    if hasattr(db, 'execute'):
+        return db.execute(query, params)
+    else:
+        cursor = db.cursor()
+        cursor.execute(query, params)
+        return cursor
+
 def init_db():
     db = get_db()
     with current_app.open_resource('schema.sql', mode='r') as f:
         schema = f.read()
     
-    # Detectar si es PostgreSQL o SQLite
     db_url = os.environ.get('DATABASE_URL')
     if db_url:
-        # PostgreSQL: ejecutar statement por statement
         statements = schema.split(';')
+        cursor = db.cursor()
         for stmt in statements:
             stmt = stmt.strip()
             if stmt and not stmt.startswith('--'):
-                # Adaptar sintaxis SQLite a PostgreSQL
-                stmt = stmt.replace('INTEGER PRIMARY KEY AUTOINCREMENT', 'SERIAL PRIMARY KEY')
-                stmt = stmt.replace('BOOLEAN', 'BOOLEAN')
-                stmt = stmt.replace('DATETIME', 'TIMESTAMP')
-                stmt = stmt.replace("NOT NULL DEFAULT CURRENT_TIMESTAMP", "DEFAULT CURRENT_TIMESTAMP")
                 try:
-                    db.execute(stmt)
+                    cursor.execute(stmt)
                 except Exception as e:
-                    print(f"Warning executing statement: {e}")
+                    print(f"Warning: {e}")
+        db.commit()
     else:
-        # SQLite: executescript funciona bien
         db.executescript(schema)
-    
-    db.commit()
+        db.commit()
 
 def init_app(app):
     app.teardown_appcontext(close_db)
