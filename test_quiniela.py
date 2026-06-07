@@ -38,12 +38,12 @@ for i, p in enumerate(partidos):
 print(f"  Form data: {form_data}")
 
 # 4. Ejecutar la misma lógica que quiniela_guardar
-quiniela = conn.execute('SELECT * FROM quinielas WHERE usuario_id = ?', (test_user_id,)).fetchone()
-quiniela_id = quiniela['id']
+quiniela = conn.execute('SELECT id, usuario_id, finalizada FROM quinielas WHERE usuario_id = ?', (test_user_id,)).fetchone()
+quiniela_id = quiniela[0]
 print(f"  Quiniela ID: {quiniela_id}")
 
 # Verificar si está finalizada
-if quiniela['finalizada']:
+if quiniela[2]:
     print("  [ERROR] Quiniela está finalizada")
 else:
     # Borrar selecciones anteriores
@@ -67,7 +67,7 @@ else:
 
 # 5. Verificar
 print("\n[TEST] Verificando...")
-selecciones = conn.execute('SELECT * FROM selecciones WHERE quiniela_id = ?', (quiniela_id,)).fetchall()
+selecciones = conn.execute('SELECT id, quiniela_id, partido_id, eleccion FROM selecciones WHERE quiniela_id = ?', (quiniela_id,)).fetchall()
 print(f"  Selecciones guardadas: {len(selecciones)}")
 for s in selecciones:
     print(f"    - id={s[0]}, partido={s[2]}, eleccion={s[3]}")
