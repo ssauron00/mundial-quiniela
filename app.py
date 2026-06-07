@@ -241,26 +241,46 @@ def create_app():
     @app.route('/quiniela/guardar', methods=['POST'])
     @login_required
     def quiniela_guardar():
+        print(f"[GUARDAR] Usuario: {session.get('usuario_id')}")
+        print(f"[GUARDAR] Form data: {dict(request.form)}")
+        
         if not get_setting('quinielas_activas', '1') == '1':
             flash('Las quinielas están desactivadas por el administrador.', 'warning')
             return redirect(url_for('quiniela_hacer'))
         db = get_db()
         quiniela = db.execute('SELECT * FROM quinielas WHERE usuario_id = ?', (session['usuario_id'],)).fetchone()
+        
+        if not quiniela:
+            print("[GUARDAR] ERROR: No se encontró quiniela")
+            flash('No tienes quiniela creada.', 'danger')
+            return redirect(url_for('quiniela_hacer'))
+            
+        print(f"[GUARDAR] Quiniela ID: {quiniela['id']}, finalizada: {quiniela['finalizada']}")
+        
         if quiniela['finalizada']:
             flash('Tu quiniela ya fue finalizada. No se pueden hacer cambios.', 'warning')
             return redirect(url_for('quiniela_hacer'))
         quiniela_id = quiniela['id']
         db.execute('DELETE FROM selecciones WHERE quiniela_id = ?', (quiniela_id,))
+        
+        inserted = 0
         for key, value in request.form.items():
             if key.startswith('partido_'):
                 partido_id = int(key.split('_')[1])
                 eleccion = value
                 if eleccion in ('1','X','2'):
-                    db.execute('''
-                        INSERT INTO selecciones (quiniela_id, partido_id, eleccion)
-                        VALUES (?, ?, ?)
-                    ''', (quiniela_id, partido_id, eleccion))
+                    try:
+                        db.execute('''
+                            INSERT INTO selecciones (quiniela_id, partido_id, eleccion)
+                            VALUES (?, ?, ?)
+                        ''', (quiniela_id, partido_id, eleccion))
+                        inserted += 1
+                        print(f"[GUARDAR] Insertado: partido={partido_id}, eleccion={eleccion}")
+                    except Exception as e:
+                        print(f"[GUARDAR] ERROR insertando partido {partido_id}: {e}")
+        
         db.commit()
+        print(f"[GUARDAR] Total insertados: {inserted}")
         flash('Quiniela guardada.', 'success')
         return redirect(url_for('quiniela_hacer'))
 
