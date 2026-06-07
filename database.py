@@ -4,46 +4,33 @@ from pathlib import Path
 from flask import g, current_app
 
 DB_PATH = Path('/tmp/mundial.db')
+_initialized = False
 
 def _ensure_db():
-    """Crear BD y tablas si no existen"""
+    global _initialized
+    if _initialized:
+        return
+    
+    print(f"Checking database at {DB_PATH}")
+    
     if not DB_PATH.exists():
-        print(f"Creating database at {DB_PATH}")
+        print("Database does not exist, creating...")
         conn = sqlite3.connect(DB_PATH)
         conn.execute("PRAGMA foreign_keys = ON")
+        
         schema_path = Path(__file__).parent / 'schema.sql'
         if schema_path.exists():
             with open(schema_path, 'r') as f:
                 conn.executescript(f.read())
+            print("Schema executed")
+        
         conn.commit()
-        
-        # Crear admin
-        from werkzeug.security import generate_password_hash
-        pw_hash = generate_password_hash('admin123')
-        conn.execute('INSERT INTO usuarios (email, password_hash, nombre, rol) VALUES (?, ?, ?, ?)',
-                     ('admin@example.com', pw_hash, 'Administrador', 'admin'))
-        conn.execute('INSERT INTO settings (key, value) VALUES (?, ?)', ('quinielas_activas', '1'))
-        conn.commit()
-        
-        # Cargar CSV
-        csv_path = Path(__file__).parent / 'data' / 'partidos.csv'
-        if csv_path.exists():
-            import csv
-            with open(csv_path, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    local = row['equipo_local'].strip()
-                    visitante = row['equipo_visitante'].strip()
-                    cur = conn.execute('INSERT OR IGNORE INTO equipos (nombre) VALUES (?)', (local,))
-                    local_id = cur.lastrowid or conn.execute('SELECT id FROM equipos WHERE nombre = ?', (local,)).fetchone()[0]
-                    cur = conn.execute('INSERT OR IGNORE INTO equipos (nombre) VALUES (?)', (visitante,))
-                    visitante_id = cur.lastrowid or conn.execute('SELECT id FROM equipos WHERE nombre = ?', (visitante,)).fetchone()[0]
-                    conn.execute('INSERT OR IGNORE INTO partidos (fase, fecha, equipo_local_id, equipo_visitante_id) VALUES (?, ?, ?, ?)',
-                                (row['fase'].strip(), row['fecha'].strip(), local_id, visitante_id))
-            conn.commit()
-        
         conn.close()
-        print("Database initialized")
+        _initialized = True
+        print("Database created successfully")
+    else:
+        print("Database already exists")
+        _initialized = True
 
 # Ejecutar al importar
 _ensure_db()
