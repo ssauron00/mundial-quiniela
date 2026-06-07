@@ -3,19 +3,35 @@ set -e
 
 cd /app
 export FLASK_APP=app.py
+mkdir -p /tmp
 
-# Inicializar
-mkdir -p data
-flask init-db 2>/dev/null || true
-python3 migrate.py 2>/dev/null || true
-python3 create_admin.py
-python3 seed.py 2>/dev/null || true
+# Crear BD y tablas si no existen
+python3 -c "
+import sqlite3
+from pathlib import Path
 
-# Verificar PORT
-if [ -z "$PORT" ]; then
-    echo "WARNING: PORT not set, using 5000"
-    PORT=5000
-fi
+DB_PATH = Path('/tmp/mundial.db')
+print(f'Database: {DB_PATH}')
 
-echo "Starting gunicorn on port $PORT"
-exec gunicorn app:app --bind "0.0.0.0:$PORT" --workers 2 --timeout 120
+conn = sqlite3.connect(DB_PATH)
+conn.execute('PRAGMA foreign_keys = ON')
+
+# Create tables
+with open('schema.sql', 'r') as f:
+    conn.executescript(f.read())
+conn.commit()
+print('Tables created/verified')
+conn.close()
+"
+
+# Cargar partidos desde CSV
+echo "Loading partidos..."
+python3 seed.py
+
+# Crear admin
+echo "Creating admin..."
+python3 setup_admin.py
+
+# Iniciar
+echo "Starting gunicorn on port ${PORT:-5000}"
+exec gunicorn app:app --bind "0.0.0.0:${PORT:-5000}" --workers 2 --timeout 120
