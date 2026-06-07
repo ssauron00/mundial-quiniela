@@ -49,14 +49,6 @@ def create_app():
     app = Flask(__name__)
     app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-me')
     init_app(app)
-    
-    # Crear tablas automáticamente si no existen
-    with app.app_context():
-        from database import DB_PATH
-        if not DB_PATH.exists():
-            _create_tables()
-            _create_admin()
-            _load_csv()
 
     # Helper: detectar si es PostgreSQL
     def is_postgres():
