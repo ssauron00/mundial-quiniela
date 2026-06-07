@@ -4,10 +4,59 @@ from auth import login_required, role_required, create_user, get_user_by_email, 
 import os
 from io import BytesIO
 
+def _create_tables():
+    import sqlite3
+    conn = sqlite3.connect(DB_PATH)
+    with open('schema.sql', 'r') as f:
+        conn.executescript(f.read())
+    conn.commit()
+    conn.close()
+    print("Tables created")
+
+def _create_admin():
+    from werkzeug.security import generate_password_hash
+    conn = sqlite3.connect(DB_PATH)
+    existing = conn.execute('SELECT id FROM usuarios WHERE email = ?', ('admin@example.com',)).fetchone()
+    if not existing:
+        pw_hash = generate_password_hash('admin123')
+        conn.execute('INSERT INTO usuarios (email, password_hash, nombre, rol) VALUES (?, ?, ?, ?)',
+                     ('admin@example.com', pw_hash, 'Administrador', 'admin'))
+        conn.execute('INSERT INTO settings (key, value) VALUES (?, ?)', ('quinielas_activas', '1'))
+        conn.commit()
+        print("Admin created")
+    conn.close()
+
+def _load_csv():
+    import csv
+    conn = sqlite3.connect(DB_PATH)
+    if Path('data/partidos.csv').exists():
+        with open('data/partidos.csv', 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                local = row['equipo_local'].strip()
+                visitante = row['equipo_visitante'].strip()
+                cur = conn.execute('INSERT OR IGNORE INTO equipos (nombre) VALUES (?)', (local,))
+                local_id = cur.lastrowid
+                cur = conn.execute('INSERT OR IGNORE INTO equipos (nombre) VALUES (?)', (visitante,))
+                visitante_id = cur.lastrowid
+                conn.execute('INSERT OR IGNORE INTO partidos (fase, fecha, equipo_local_id, equipo_visitante_id) VALUES (?, ?, ?, ?)',
+                            (row['fase'].strip(), row['fecha'].strip(), local_id, visitante_id))
+        conn.commit()
+        print("CSV loaded")
+    conn.close()
+
 def create_app():
     app = Flask(__name__)
     app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-me')
     init_app(app)
+    
+    # Crear tablas automáticamente si no existen
+    with app.app_context():
+        from database import DB_PATH
+        if not DB_PATH.exists():
+            _create_tables()
+            _create_admin()
+            _load_csv()
 
     # Helper: detectar si es PostgreSQL
     def is_postgres():
