@@ -191,7 +191,7 @@ def create_app():
             FROM partidos p
             JOIN equipos el ON p.equipo_local_id = el.id
             JOIN equipos ev ON p.equipo_visitante_id = ev.id
-            LEFT JOIN selecciones s ON s.partido_id = p.id AND s.quiniela_id = %s
+            LEFT JOIN selecciones s ON s.partido_id = p.id AND s.quiniela_id = ?
             ORDER BY p.fecha
         ''', (quiniela_id,)).fetchall()
         return render_template('quiniela/hacer.html', partidos=partidos,
@@ -391,9 +391,9 @@ def create_app():
 
         partidos = db.execute('''
             SELECT p.fase, p.fecha,
-                   el.nombre AS local, el.bandera_url AS bandera_local,
-                   ev.nombre AS visitante, ev.bandera_url AS bandera_visitante,
-                   s.elección
+                   el.nombre AS local,
+                   ev.nombre AS visitante,
+                   s.eleccion
             FROM partidos p
             JOIN equipos el ON p.equipo_local_id = el.id
             JOIN equipos ev ON p.equipo_visitante_id = ev.id
