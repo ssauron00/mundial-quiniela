@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, g, make_response
-from database import get_db, init_app
+from database import get_db, init_app, is_postgres
 from auth import login_required, role_required, create_user, get_user_by_email, check_password
 import os
 from io import BytesIO
@@ -13,12 +13,7 @@ def create_app():
     def is_postgres():
         return os.environ.get('DATABASE_URL') is not None
 
-    # Helper: ejecutar query compatible SQLite/PostgreSQL
-    def execute(query, params=()):
-        db = get_db()
-        if is_postgres():
-            query = query.replace('?', '%s')
-        return db.execute(query, params)
+    # Helper: get setting value
     def get_setting(key, default='0'):
         db = get_db()
         row = db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
