@@ -180,13 +180,15 @@ def create_app():
         # get partidos
         partidos = db.execute('''
             SELECT p.id, p.fase, p.fecha,
-                   el.nombre AS local, el.bandera_url AS bandera_local,
-                   ev.nombre AS visitante, ev.bandera_url AS bandera_visitante,
-                   s.elección
+                   el.nombre AS local,
+                   el.bandera_url AS "bandera_local",
+                   ev.nombre AS visitante,
+                   ev.bandera_url AS "bandera_visitante",
+                   s.eleccion AS eleccion
             FROM partidos p
             JOIN equipos el ON p.equipo_local_id = el.id
             JOIN equipos ev ON p.equipo_visitante_id = ev.id
-            LEFT JOIN selecciones s ON s.partido_id = p.id AND s.quiniela_id = ?
+            LEFT JOIN selecciones s ON s.partido_id = p.id AND s.quiniela_id = %s
             ORDER BY p.fecha
         ''', (quiniela_id,)).fetchall()
         return render_template('quiniela/hacer.html', partidos=partidos,
@@ -417,80 +419,41 @@ def create_app():
             elements.append(Paragraph("Estado: <i>Sin finalizar</i>", info_style))
         elements.append(Spacer(1, 6*mm))
 
-        # Table with flags
-        from reportlab.platypus import Image as RLImage
-        from pathlib import Path
-
-        IMG_DIR = Path(__file__).parent / "data" / "img"
-
-        def get_flag_path(bandera_url):
-            if not bandera_url:
-                return None
-            try:
-                codigo = bandera_url.split("/w40/")[1].replace(".png", "")
-                path = IMG_DIR / f"{codigo}.png"
-                if path.exists():
-                    return str(path)
-            except:
-                pass
-            return None
-
-        def make_flag_cell(bandera_url, nombre):
-            """Create a mini-table with flag on top, name below."""
-            flag_path = get_flag_path(bandera_url)
-            if flag_path:
-                img = RLImage(flag_path, width=12, height=8, hAlign='CENTER')
-            else:
-                img = Paragraph("", ParagraphStyle('empty', parent=styles['Normal'], fontSize=1))
-            name = Paragraph(f"<b>{nombre}</b>", ParagraphStyle('fn', parent=styles['Normal'], fontSize=7, alignment=TA_CENTER))
-            inner = Table([[img], [name]], colWidths=[40*mm])
-            inner.setStyle(TableStyle([
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('TOPPADDING', (0, 0), (-1, -1), 1),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
-            ]))
-            return inner
-
-        def make_eleccion_cell(eleccion, bandera_local_url, bandera_visitante_url):
-            if eleccion == '1':
-                flag_path = get_flag_path(bandera_local_url)
-                if flag_path:
-                    return RLImage(flag_path, width=12, height=8, hAlign='CENTER')
-                return Paragraph("<b>1</b>", ParagraphStyle('e', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER))
-            elif eleccion == '2':
-                flag_path = get_flag_path(bandera_visitante_url)
-                if flag_path:
-                    return RLImage(flag_path, width=12, height=8, hAlign='CENTER')
-                return Paragraph("<b>2</b>", ParagraphStyle('e', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER))
-            elif eleccion == 'X':
-                return Paragraph("<b>Empate</b>", ParagraphStyle('emp', parent=styles['Normal'], fontSize=7, alignment=TA_CENTER, textColor=colors.HexColor('#b8860b')))
-            else:
-                return Paragraph("-", ParagraphStyle('emp', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER))
-
-        data = [['#', 'Fase', 'Fecha', 'Local', 'Visitante', 'Elección']]
+        # Table - text only (no flags for PDF stability)
+        data = [['#', 'Fase', 'Fecha', 'Local', 'Visitante', 'Eleccion']]
         for i, p in enumerate(partidos, 1):
+            eleccion = p['eleccion'] if p['eleccion'] else '-'
+            if eleccion == '1':
+                eleccion_texto = f"1 - {p['local']}"
+            elif eleccion == '2':
+                eleccion_texto = f"2 - {p['visitante']}"
+            elif eleccion == 'X':
+                eleccion_texto = "X - Empate"
+            else:
+                eleccion_texto = "-"
             data.append([
-                Paragraph(str(i), ParagraphStyle('n', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER)),
-                Paragraph(p['fase'], ParagraphStyle('f', parent=styles['Normal'], fontSize=7, alignment=TA_CENTER)),
-                Paragraph(p['fecha'][:16] if p['fecha'] else '-', ParagraphStyle('f2', parent=styles['Normal'], fontSize=7, alignment=TA_CENTER)),
-                make_flag_cell(p['bandera_local'], p['local']),
-                make_flag_cell(p['bandera_visitante'], p['visitante']),
-                make_eleccion_cell(p['elección'], p['bandera_local'], p['bandera_visitante']),
+                str(i),
+                p['fase'],
+                p['fecha'][:16] if p['fecha'] else '-',
+                p['local'],
+                p['visitante'],
+                eleccion_texto
             ])
 
-        table = Table(data, colWidths=[10*mm, 22*mm, 28*mm, 42*mm, 42*mm, 22*mm])
+        table = Table(data, colWidths=[10*mm, 25*mm, 28*mm, 45*mm, 45*mm, 35*mm])
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e94560')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 9),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (3, 1), (5, -1), 'LEFT'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
         ]))
         elements.append(table)
 

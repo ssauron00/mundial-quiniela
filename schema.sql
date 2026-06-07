@@ -7,6 +7,7 @@ DROP TABLE IF EXISTS equipos;
 DROP TABLE IF EXISTS rol_menu_permisos;
 DROP TABLE IF EXISTS menu_opciones;
 DROP TABLE IF EXISTS menu_grupos;
+DROP TABLE IF EXISTS settings;
 
 -- Teams
 CREATE TABLE equipos (
@@ -18,7 +19,7 @@ CREATE TABLE equipos (
 -- Matches
 CREATE TABLE partidos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    fase TEXT NOT NULL,          -- e.g., 'grupos', 'octavos', etc.
+    fase TEXT NOT NULL,
     fecha DATETIME NOT NULL,
     equipo_local_id INTEGER NOT NULL,
     equipo_visitante_id INTEGER NOT NULL,
@@ -35,7 +36,7 @@ CREATE TABLE usuarios (
     password_hash TEXT NOT NULL,
     nombre TEXT NOT NULL,
     activo BOOLEAN NOT NULL DEFAULT 1,
-    rol TEXT NOT NULL DEFAULT 'usuario'   -- 'admin' or 'usuario'
+    rol TEXT NOT NULL DEFAULT 'usuario'
 );
 
 -- Quiniela (one per user)
@@ -53,10 +54,10 @@ CREATE TABLE selecciones (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     quiniela_id INTEGER NOT NULL,
     partido_id INTEGER NOT NULL,
-    elección TEXT NOT NULL CHECK (elección IN ('1','X','2')),
+    eleccion TEXT NOT NULL CHECK (eleccion IN ('1','X','2')),
     FOREIGN KEY (quiniela_id) REFERENCES quinielas(id),
     FOREIGN KEY (partido_id) REFERENCES partidos(id),
-    UNIQUE(quiniela_id, partido_id)  -- one selection per match per user
+    UNIQUE(quiniela_id, partido_id)
 );
 
 -- Menu groups
