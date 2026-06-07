@@ -518,6 +518,16 @@ p { margin-bottom: 0.8rem; color: #bbb; }
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
 }
 
+.btn-limpiar {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  margin-left: 0.5rem;
+}
+
+.btn-limpiar:hover {
+  background: linear-gradient(135deg, #f87171, #ef4444);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
 /* Disabled radio labels */
 .radio-group input[type="radio"]:disabled + label {
   opacity: 0.4;

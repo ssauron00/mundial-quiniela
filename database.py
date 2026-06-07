@@ -11,20 +11,38 @@ def is_postgres():
         _is_postgres = os.environ.get('DATABASE_URL') is not None
     return _is_postgres
 
+class CursorWrapper:
+    """Wrapper para cursor que funciona con SQLite y PostgreSQL"""
+    def __init__(self, cursor, is_pg):
+        self._cursor = cursor
+        self._is_pg = is_pg
+    
+    def fetchall(self):
+        rows = self._cursor.fetchall()
+        if self._is_pg:
+            return rows
+        return rows
+    
+    def fetchone(self):
+        return self._cursor.fetchone()
+    
+    def __iter__(self):
+        return iter(self._cursor)
+    
+    @property
+    def description(self):
+        return self._cursor.description
+
 class DBWrapper:
-    """Wrapper que convierte ? a %s para PostgreSQL automáticamente"""
     def __init__(self, conn):
         self._conn = conn
     
     def execute(self, query, params=()):
         if is_postgres():
             query = query.replace('?', '%s')
-        if hasattr(self._conn, 'execute'):
-            return self._conn.execute(query, params)
-        else:
-            cursor = self._conn.cursor()
-            cursor.execute(query, params)
-            return cursor
+        cursor = self._conn.cursor()
+        cursor.execute(query, params)
+        return CursorWrapper(cursor, is_postgres())
     
     def commit(self):
         self._conn.commit()
@@ -32,8 +50,8 @@ class DBWrapper:
     def cursor(self):
         return self._conn.cursor()
     
-    def __getattr__(self, name):
-        return getattr(self._conn, name)
+    def close(self):
+        self._conn.close()
 
 def get_db():
     if 'db' not in g:
@@ -45,23 +63,24 @@ def get_db():
         else:
             DATABASE = Path(__file__).parent / 'data' / 'mundial.db'
             DATABASE.parent.mkdir(exist_ok=True)
-            g.db = DBWrapper(sqlite3.connect(DATABASE))
-            g.db._conn.row_factory = sqlite3.Row
-            g.db.execute("PRAGMA foreign_keys = ON")
+            conn = sqlite3.connect(DATABASE)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys = ON")
+            g.db = DBWrapper(conn)
     return g.db
 
 def close_db(e=None):
     db = g.pop('db', None)
     if db is not None:
-        db._conn.close()
+        db.close()
 
 def init_db():
     db = get_db()
+    cursor = db.cursor()
     with current_app.open_resource('schema.sql', mode='r') as f:
         schema = f.read()
     
     if is_postgres():
-        cursor = db.cursor()
         statements = schema.split(';')
         for stmt in statements:
             stmt = stmt.strip()
@@ -72,7 +91,7 @@ def init_db():
                     print(f"Warning: {e}")
         db.commit()
     else:
-        db._conn.executescript(schema)
+        cursor.executescript(schema)
         db.commit()
 
 def init_app(app):

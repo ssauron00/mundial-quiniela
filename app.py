@@ -259,6 +259,22 @@ def create_app():
         flash('Quiniela reabierta. Ya puedes hacer cambios.', 'success')
         return redirect(url_for('quiniela_hacer'))
 
+    @app.route('/quiniela/limpiar', methods=['POST'])
+    @login_required
+    def quiniela_limpiar():
+        if not get_setting('quinielas_activas', '1') == '1':
+            flash('Las quinielas están desactivadas por el administrador.', 'warning')
+            return redirect(url_for('quiniela_hacer'))
+        db = get_db()
+        quiniela = db.execute('SELECT * FROM quinielas WHERE usuario_id = ?', (session['usuario_id'],)).fetchone()
+        # Borrar todas las selecciones del usuario
+        db.execute('DELETE FROM selecciones WHERE quiniela_id = ?', (quiniela['id'],))
+        # Reabrir la quiniela
+        db.execute("UPDATE quinielas SET finalizada=0, finalizada_en=NULL WHERE id=?", (quiniela['id'],))
+        db.commit()
+        flash('Quiniela limpiada. Puedes empezar de nuevo.', 'success')
+        return redirect(url_for('quiniela_hacer'))
+
     # Registro de usuarios
     @app.route('/register', methods=['GET', 'POST'])
     def register():

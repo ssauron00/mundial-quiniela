@@ -78,6 +78,7 @@
         {% if quinielas_activas and not finalizada %}
         <button type="submit" class="btn">💾 Guardar quiniela</button>
         <button type="button" class="btn btn-finalizar" id="btnFinalizar">🔒 Finalizar quiniela</button>
+        <button type="submit" class="btn btn-limpiar" formaction="{{ url_for('quiniela_limpiar') }}" onclick="return confirm('¿Limpiar tu quiniela? Se borrarán todas tus selecciones.');">🗑️ Limpiar</button>
         {% endif %}
     </form>
 
