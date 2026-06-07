@@ -390,6 +390,19 @@ def create_app():
             settings[row['key']] = row['value']
         return render_template('admin/settings.html', settings=settings)
 
+    # Admin: reset quinielas
+    @app.route('/admin/reset', methods=['POST'])
+    @login_required
+    @role_required('admin')
+    def admin_reset_quinielas():
+        db = get_db()
+        # Borrar solo selecciones y quinielas (mantiene usuarios y partidos)
+        db.execute('DELETE FROM selecciones')
+        db.execute('DELETE FROM quinielas')
+        db.commit()
+        flash('Quinielas reiniciadas. Los usuarios pueden crear nuevas quinielas.', 'success')
+        return redirect('/admin/settings')
+
     # PDF: resumen de quiniela
     @app.route('/quiniela/pdf')
     @login_required

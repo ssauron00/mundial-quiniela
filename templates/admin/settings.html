@@ -34,4 +34,14 @@
         <div class="alert alert-danger">🚫 Las quinielas están <strong>DESACTIVADAS</strong>. Los usuarios NO pueden hacer cambios.</div>
     {% endif %}
 </div>
+
+<div class="card" style="margin-top:1.5rem;">
+    <div class="card-header">
+        <h2>⚠️ Zona de peligro</h2>
+    </div>
+    <p style="color:#aaa;margin-bottom:1rem;">Reiniciar la base de datos borrará todos los usuarios, quinielas y selecciones. Solo se mantendrá el admin.</p>
+    <form method="POST" action="{{ url_for('admin_reset_db') }}" onsubmit="return confirm('¿Estás seguro? Se borrarán TODOS los datos de usuarios y quinielas.');">
+        <button type="submit" class="btn btn-danger">🗑️ Reiniciar Base de Datos</button>
+    </form>
+</div>
 {% endblock %}
