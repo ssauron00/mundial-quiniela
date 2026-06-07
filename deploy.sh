@@ -1,97 +1,111 @@
 #!/bin/bash
-# deploy.sh - Script de despliegue para Mundial Quiniela
-# Ejecutar en la VM de Oracle Cloud como ubuntu
-
 set -e
 
-APP_DIR="/home/ubuntu/mundial"
-SERVICE_NAME="mundial"
-
-echo "=== Mundial Quiniela - Deploy ==="
-
-# 1. Actualizar sistema
-echo "[1/7] Actualizando sistema..."
-sudo apt update && sudo apt upgrade -y
-
-# 2. Instalar dependencias del sistema
-echo "[2/7] Instalando dependencias..."
-sudo apt install -y python3 python3-pip python3-venv nginx sqlite3
-
-# 3. Crear entorno virtual
-echo "[3/7] Creando entorno virtual..."
-cd "$APP_DIR"
-python3 -m venv venv
-source venv/bin/activate
-
-# 4. Instalar dependencias de Python
-echo "[4/7] Instalando dependencias de Python..."
-pip install --upgrade pip
-pip install -r requirements.txt
-
-# 5. Inicializar BD
-echo "[5/7] Inicializando base de datos..."
-mkdir -p data
+cd /app
 export FLASK_APP=app.py
-flask init-db
-python3 migrate.py
-python3 create_admin.py
-python3 seed.py
 
-# 6. Configurar systemd
-echo "[6/7] Configurando servicio..."
-sudo tee /etc/systemd/system/${SERVICE_NAME}.service > /dev/null << EOF
-[Unit]
-Description=Mundial Quiniela
-After=network.target
+# Inicializar BD con Python
+mkdir -p /tmp
+python3 -c "
+import sqlite3
+from pathlib import Path
 
-[Service]
-User=ubuntu
-WorkingDirectory=${APP_DIR}
-Environment="PATH=${APP_DIR}/venv/bin"
-ExecStart=${APP_DIR}/venv/bin/gunicorn --workers 2 --bind 127.0.0.1:5000 app:app
-Restart=always
-RestartSec=5
+DB_PATH = Path('/tmp/mundial.db')
+print(f'Creating DB at {DB_PATH}')
 
-[Install]
-WantedBy=multi-user.target
-EOF
+conn = sqlite3.connect(DB_PATH)
+conn.execute('PRAGMA foreign_keys = ON')
 
-sudo systemctl daemon-reload
-sudo systemctl enable ${SERVICE_NAME}
-sudo systemctl start ${SERVICE_NAME}
+# Leer y ejecutar schema
+with open('schema.sql', 'r') as f:
+    schema = f.read()
 
-# 7. Configurar Nginx
-echo "[7/7] Configurando Nginx..."
-sudo tee /etc/nginx/sites-available/${SERVICE_NAME} > /dev/null << EOF
-server {
-    listen 80;
-    server_name _;
+conn.executescript(schema)
+conn.commit()
+print('Schema created successfully')
 
-    location / {
-        proxy_pass http://127.0.0.1:5000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    }
+# Verificar tablas
+tables = conn.execute(\"SELECT name FROM sqlite_master WHERE type='table'\").fetchall()
+print(f'Tables: {[t[0] for t in tables]}')
+conn.close()
+"
 
-    location /static {
-        alias ${APP_DIR}/static;
-        expires 7d;
-    }
-}
-EOF
+# Crear admin
+python3 -c "
+import sqlite3
+from pathlib import Path
+from werkzeug.security import generate_password_hash
 
-sudo ln -sf /etc/nginx/sites-available/${SERVICE_NAME} /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl restart nginx
+DB_PATH = Path('/tmp/mundial.db')
+conn = sqlite3.connect(DB_PATH)
 
-echo ""
-echo "=== Deploy completado ==="
-echo "La app debería estar corriendo en: http://$(curl -s ifconfig.me)"
-echo ""
-echo "Comandos útiles:"
-echo "  Ver logs:        sudo journalctl -u ${SERVICE_NAME} -f"
-echo "  Reiniciar:       sudo systemctl restart ${SERVICE_NAME}"
-echo "  Ver estado:      sudo systemctl status ${SERVICE_NAME}"
-echo "  Reiniciar Nginx: sudo systemctl restart nginx"
+# Verificar si admin existe
+existing = conn.execute('SELECT id FROM usuarios WHERE email = ?', ('admin@example.com',)).fetchone()
+if not existing:
+    pw_hash = generate_password_hash('admin123')
+    conn.execute('INSERT INTO usuarios (email, password_hash, nombre, rol) VALUES (?, ?, ?, ?)',
+                 ('admin@example.com', pw_hash, 'Administrador', 'admin'))
+    conn.commit()
+    print('Admin created')
+else:
+    print('Admin already exists')
+
+# Crear settings si no existe
+existing = conn.execute('SELECT key FROM settings WHERE key = ?', ('quinielas_activas',)).fetchone()
+if not existing:
+    conn.execute('INSERT INTO settings (key, value) VALUES (?, ?)', ('quinielas_activas', '1'))
+    conn.commit()
+    print('Settings created')
+
+conn.close()
+"
+
+# Cargar partidos desde CSV si hay
+python3 -c "
+import sqlite3
+import csv
+from pathlib import Path
+
+DB_PATH = Path('/tmp/mundial.db')
+conn = sqlite3.connect(DB_PATH)
+
+# Verificar si hay partidos
+count = conn.execute('SELECT COUNT(*) FROM partidos').fetchone()[0]
+if count == 0 and Path('data/partidos.csv').exists():
+    with open('data/partidos.csv', 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            fase = row['fase'].strip()
+            fecha = row['fecha'].strip()
+            local = row['equipo_local'].strip()
+            visitante = row['equipo_visitante'].strip()
+            
+            # Crear equipos si no existen
+            local_id = conn.execute('SELECT id FROM equipos WHERE nombre = ?', (local,)).fetchone()
+            if not local_id:
+                cur = conn.execute('INSERT INTO equipos (nombre) VALUES (?)', (local,))
+                local_id = cur.lastrowid
+            else:
+                local_id = local_id[0]
+                
+            visitante_id = conn.execute('SELECT id FROM equipos WHERE nombre = ?', (visitante,)).fetchone()
+            if not visitante_id:
+                cur = conn.execute('INSERT INTO equipos (nombre) VALUES (?)', (visitante,))
+                visitante_id = cur.lastrowid
+            else:
+                visitante_id = visitante_id[0]
+            
+            conn.execute('INSERT OR IGNORE INTO partidos (fase, fecha, equipo_local_id, equipo_visitante_id) VALUES (?, ?, ?, ?)',
+                        (fase, fecha, local_id, visitante_id))
+    conn.commit()
+    print(f'Partidos cargados desde CSV')
+else:
+    print(f'Ya existen {count} partidos, saltando seed')
+
+conn.close()
+" 2>/dev/null || true
+
+# Verificar PORT
+PORT=\${PORT:-5000}
+echo "Starting gunicorn on port \$PORT"
+exec gunicorn app:app --bind "0.0.0.0:\$PORT" --workers 2 --timeout 120
