@@ -60,13 +60,13 @@
                     </td>
                     <td>
                         <div class="radio-group">
-                            <input type="radio" name="partido_{{ p.id }}" value="1" id="p{{ p.id }}_1" {% if p.elección == '1' %}checked{% endif %} {% if finalizada or not quinielas_activas %}disabled{% endif %}>
+                            <input type="radio" name="partido_{{ p.id }}" value="1" id="p{{ p.id }}_1" {% if p.eleccion == '1' %}checked{% endif %} {% if finalizada or not quinielas_activas %}disabled{% endif %}>
                             <label for="p{{ p.id }}_1" class="radio-1">1</label>
 
-                            <input type="radio" name="partido_{{ p.id }}" value="X" id="p{{ p.id }}_x" {% if p.elección == 'X' %}checked{% endif %} {% if finalizada or not quinielas_activas %}disabled{% endif %}>
+                            <input type="radio" name="partido_{{ p.id }}" value="X" id="p{{ p.id }}_x" {% if p.eleccion == 'X' %}checked{% endif %} {% if finalizada or not quinielas_activas %}disabled{% endif %}>
                             <label for="p{{ p.id }}_x" class="radio-x">X</label>
 
-                            <input type="radio" name="partido_{{ p.id }}" value="2" id="p{{ p.id }}_2" {% if p.elección == '2' %}checked{% endif %} {% if finalizada or not quinielas_activas %}disabled{% endif %}>
+                            <input type="radio" name="partido_{{ p.id }}" value="2" id="p{{ p.id }}_2" {% if p.eleccion == '2' %}checked{% endif %} {% if finalizada or not quinielas_activas %}disabled{% endif %}>
                             <label for="p{{ p.id }}_2" class="radio-2">2</label>
                         </div>
                     </td>
