@@ -382,7 +382,7 @@ def create_app():
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.enums import TA_CENTER
         
-        db = self.get_db()
+        db = get_db()
         
         # Get user info
         usuario = db.execute('SELECT * FROM usuarios WHERE id = ?', (id,)).fetchone()
