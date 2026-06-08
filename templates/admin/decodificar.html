@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Decodificar Código - Admin - Mundial Quiniela{% endblock %}
+{% block content %}
+<div class="card" style="max-width:700px;margin:2rem auto;">
+    <div class="card-header">
+        <h2>🔓 Decodificar Código de Quiniela</h2>
+    </div>
+    <p style="color:#aaa;margin-bottom:1rem;">Ingresa el código de verificación para ver la quiniela completa del usuario.</p>
+    
+    <form method="POST" action="{{ url_for('admin_decodificar_codigo') }}">
+        <div class="form-group">
+            <label for="codigo">Código de verificación</label>
+            <textarea id="codigo" name="codigo" required placeholder="Ingresa el código generado al finalizar la quiniela..." style="width:100%;padding:0.7rem;border-radius:8px;background:#16213e;color:#eee;border:1px solid #333;min-height:80px;font-family:monospace;font-size:0.85rem;"></textarea>
+        </div>
+        <button type="submit" class="btn">🔓 Decodificar</button>
+        <a href="{{ url_for('admin_usuarios_list') }}" class="btn btn-secondary">Cancelar</a>
+    </form>
+    
+    {% if error %}
+    <div class="alert alert-danger" style="margin-top:1rem;">
+        ⚠️ {{ error }}
+    </div>
+    {% endif %}
+    
+    {% if resultado %}
+    <div style="margin-top:1.5rem;">
+        <h3 style="color:#4ade80;margin-bottom:1rem;">✅ Quiniela Decodificada</h3>
+        
+        <div class="card" style="margin-bottom:1rem;">
+            <p><strong>Email:</strong> {{ resultado.email }}</p>
+            {% if resultado.usuario %}
+            <p><strong>Usuario:</strong> {{ resultado.usuario['nombre'] }} (ID: {{ resultado.usuario['id'] }})</p>
+            {% else %}
+            <p style="color:#ff6b6b;"><strong>Usuario no encontrado en la BD (puede haber sido eliminado)</strong></p>
+            {% endif %}
+            <p><strong>Total selecciones:</strong> {{ resultado.selecciones|length }}</p>
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Fase</th>
+                    <th>Local</th>
+                    <th>Visitante</th>
+                    <th>Elección</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in resultado.selecciones %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ s.fase }}</td>
+                    <td>{{ s.local }}</td>
+                    <td>{{ s.visitante }}</td>
+                    <td><strong>{{ s.eleccion }}</strong></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

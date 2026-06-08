@@ -11,6 +11,7 @@
         {% if session.usuario_rol == 'admin' %}
         <a href="{{ url_for('partidos_list') }}" class="btn">⚙️ Partidos</a>
         <a href="{{ url_for('admin_usuarios_list') }}" class="btn">👥 Usuarios</a>
+        <a href="{{ url_for('admin_decodificar_codigo') }}" class="btn">🔓 Decodificar Código</a>
         <a href="{{ url_for('admin_settings') }}" class="btn">🔧 Configuración</a>
         {% endif %}
     </div>

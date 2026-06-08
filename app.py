@@ -359,6 +359,10 @@ def create_app():
     @app.route('/quiniela/finalizar', methods=['POST'])
     @login_required
     def quiniela_finalizar():
+        import hashlib
+        import base64
+        import json
+        
         if not get_setting('quinielas_activas', '1') == '1':
             flash('Las quinielas están desactivadas por el administrador.', 'warning')
             return redirect(url_for('quiniela_hacer'))
@@ -371,9 +375,38 @@ def create_app():
         if count == 0:
             flash('Debes hacer al menos un pronóstico antes de finalizar.', 'warning')
             return redirect(url_for('quiniela_hacer'))
-        db.execute("UPDATE quinielas SET finalizada=1, finalizada_en=CURRENT_TIMESTAMP WHERE id=?", (quiniela['id'],))
+        
+        # Get all selecciones for this quiniela
+        selecciones = db.execute('''
+            SELECT s.partido_id, s.eleccion, p.fase, el.nombre as local, ev.nombre as visitante
+            FROM selecciones s
+            JOIN partidos p ON s.partido_id = p.id
+            JOIN equipos el ON p.equipo_local_id = el.id
+            JOIN equipos ev ON p.equipo_visitante_id = ev.id
+            WHERE s.quiniela_id = ?
+            ORDER BY p.fecha
+        ''', (quiniela['id'],)).fetchall()
+        
+        # Get user info
+        usuario = db.execute('SELECT email, nombre FROM usuarios WHERE id = ?', (session['usuario_id'],)).fetchone()
+        
+        # Build encoded data: usuario_email|partido_id:eleccion|partido_id:eleccion|...
+        selecciones_str = '|'.join([f"{s['partido_id']}:{s['eleccion']}" for s in selecciones])
+        raw_data = f"{usuario['email']}|{selecciones_str}"
+        
+        # Encode with base64
+        encoded = base64.b64encode(raw_data.encode()).decode()
+        
+        # Add hash for integrity verification
+        hash_check = hashlib.sha256(raw_data.encode()).hexdigest()[:8]
+        
+        # Final code: encoded.hash
+        codigo = f"{encoded}.{hash_check}"
+        
+        db.execute("UPDATE quinielas SET finalizada=1, finalizada_en=CURRENT_TIMESTAMP, codigo_verificacion=? WHERE id=?", 
+                   (codigo, quiniela['id']))
         db.commit()
-        flash('¡Quiniela finalizada! Ya no se pueden hacer cambios.', 'success')
+        flash(f'¡Quiniela finalizada! Código de verificación generado.', 'success')
         return redirect(url_for('quiniela_hacer'))
 
     @app.route('/quiniela/reabrir', methods=['POST'])
@@ -536,6 +569,9 @@ def create_app():
         elements.append(Paragraph(f"Email: {usuario['email']}", info_style))
         if quiniela['finalizada']:
             elements.append(Paragraph(f"Estado: <b>Finalizada</b> - {quiniela['finalizada_en']}", info_style))
+            if quiniela['codigo_verificacion']:
+                code_style = ParagraphStyle('Code', parent=styles['Normal'], fontSize=11, alignment=TA_CENTER, spaceBefore=3*mm, spaceAfter=3*mm, textColor=colors.HexColor('#4ade80'))
+                elements.append(Paragraph(f"✅ Código de Verificación: <b>{quiniela['codigo_verificacion']}</b>", code_style))
         else:
             elements.append(Paragraph("Estado: <i>En progreso</i>", info_style))
         elements.append(Spacer(1, 6*mm))
@@ -678,6 +714,49 @@ def create_app():
         flash('Quinielas reiniciadas. Los usuarios pueden crear nuevas quinielas.', 'success')
         return redirect('/admin/settings')
 
+    # Admin: decodificar código de quiniela
+    @app.route('/admin/decodificar', methods=['GET', 'POST'])
+    @login_required
+    @role_required('admin')
+    def admin_decodificar_codigo():
+        import base64
+        import hashlib
+        resultado = None
+        error = None
+        
+        if request.method == 'POST':
+            codigo = request.form.get('codigo', '').strip()
+            if not codigo:
+                error = 'Ingresa un código de verificación.'
+            elif '.' not in codigo:
+                error = 'Formato de código inválido.'
+            else:
+                try:
+                    encoded, hash_check = codigo.rsplit('.', 1)
+                    decoded_bytes = base64.b64decode(encoded)
+                    raw_data = decoded_bytes.decode('utf-8')
+                    expected_hash = hashlib.sha256(raw_data.encode()).hexdigest()[:8]
+                    if hash_check != expected_hash:
+                        error = 'El código ha sido modificado o es inválido (hash no coincide).'
+                    else:
+                        parts = raw_data.split('|')
+                        email = parts[0]
+                        selecciones_raw = parts[1:]
+                        db = get_db()
+                        usuario = db.execute('SELECT id, nombre FROM usuarios WHERE email = ?', (email,)).fetchone()
+                        selecciones = []
+                        for s in selecciones_raw:
+                            if ':' in s:
+                                partido_id, eleccion = s.split(':', 1)
+                                partido = db.execute('SELECT p.fase, el.nombre as local, ev.nombre as visitante FROM partidos p JOIN equipos el ON p.equipo_local_id = el.id JOIN equipos ev ON p.equipo_visitante_id = ev.id WHERE p.id = ?', (partido_id,)).fetchone()
+                                if partido:
+                                    selecciones.append({'partido_id': partido_id, 'fase': partido['fase'], 'local': partido['local'], 'visitante': partido['visitante'], 'eleccion': eleccion})
+                        resultado = {'email': email, 'usuario': usuario, 'selecciones': selecciones}
+                except Exception as e:
+                    error = f'Error al decodificar: {str(e)}'
+        
+        return render_template('admin/decodificar.html', resultado=resultado, error=error)
+
     # PDF: resumen de quiniela
     @app.route('/quiniela/pdf')
     @login_required
@@ -722,6 +801,9 @@ def create_app():
         elements.append(Paragraph(f"Usuario: <b>{usuario['nombre']}</b>", info_style))
         if quiniela['finalizada'] and quiniela['finalizada_en']:
             elements.append(Paragraph(f"Finalizada: {quiniela['finalizada_en']}", info_style))
+            if quiniela['codigo_verificacion']:
+                code_style = ParagraphStyle('Code', parent=styles['Normal'], fontSize=11, alignment=TA_CENTER, spaceBefore=3*mm, spaceAfter=3*mm, textColor=colors.HexColor('#4ade80'))
+                elements.append(Paragraph(f"✅ Código de Verificación: <b>{quiniela['codigo_verificacion']}</b>", code_style))
         else:
             elements.append(Paragraph("Estado: <i>Sin finalizar</i>", info_style))
         elements.append(Spacer(1, 6*mm))

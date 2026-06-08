@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS quinielas (
     usuario_id INTEGER NOT NULL,
     creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     finalizada INTEGER NOT NULL DEFAULT 0,
-    finalizada_en DATETIME
+    finalizada_en DATETIME,
+    codigo_verificacion TEXT
 );
 
 CREATE TABLE IF NOT EXISTS selecciones (
