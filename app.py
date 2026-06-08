@@ -218,6 +218,14 @@ def create_app():
     def quiniela_hacer():
         db = get_db()
         quiniela = db.execute('SELECT * FROM quinielas WHERE usuario_id = ?', (session['usuario_id'],)).fetchone()
+        
+        # Create quiniela if it doesn't exist
+        if not quiniela:
+            print(f"[QUINIELA] Creating quiniela for user {session['usuario_id']}")
+            cur = db.execute('INSERT INTO quinielas (usuario_id) VALUES (?)', (session['usuario_id'],))
+            db.commit()
+            quiniela = db.execute('SELECT * FROM quinielas WHERE id = ?', (cur.lastrowid,)).fetchone()
+        
         quiniela_id = quiniela['id']
         finalizada = quiniela['finalizada']
         finalizada_en = quiniela['finalizada_en']
@@ -251,9 +259,10 @@ def create_app():
         quiniela = db.execute('SELECT * FROM quinielas WHERE usuario_id = ?', (session['usuario_id'],)).fetchone()
         
         if not quiniela:
-            print("[GUARDAR] ERROR: No se encontró quiniela")
-            flash('No tienes quiniela creada.', 'danger')
-            return redirect(url_for('quiniela_hacer'))
+            print(f"[GUARDAR] Creating quiniela for user {session['usuario_id']}")
+            cur = db.execute('INSERT INTO quinielas (usuario_id) VALUES (?)', (session['usuario_id'],))
+            db.commit()
+            quiniela = db.execute('SELECT * FROM quinielas WHERE id = ?', (cur.lastrowid,)).fetchone()
             
         print(f"[GUARDAR] Quiniela ID: {quiniela['id']}, finalizada: {quiniela['finalizada']}")
         
@@ -725,7 +734,7 @@ def create_app():
         ''').fetchall()
         return render_template('leaderboard/index.html', ranking=ranking)
 
-    # Leaderboard PDF - todos los usuarios con sus quinielas
+    # Leaderboard PDF - Resultados de partidos con goles
     @app.route('/leaderboard/pdf')
     @login_required
     def leaderboard_pdf():
@@ -739,21 +748,34 @@ def create_app():
         
         db = get_db()
         
+        # Get all partidos with results
+        partidos = db.execute('''
+            SELECT p.id, p.fase, p.fecha, p.goles_local, p.goles_visitante,
+                   el.nombre AS local, ev.nombre AS visitante
+            FROM partidos p
+            JOIN equipos el ON p.equipo_local_id = el.id
+            JOIN equipos ev ON p.equipo_visitante_id = ev.id
+            WHERE p.goles_local IS NOT NULL AND p.goles_visitante IS NOT NULL
+            ORDER BY p.fecha
+        ''').fetchall()
+        
+        # Get all users with their aciertos
         ranking = db.execute('''
-            SELECT u.id, u.nombre, u.email,
-                   COUNT(DISTINCT s.id) AS total_selecciones,
+            SELECT u.id, u.nombre,
                    SUM(CASE 
                        WHEN (s.eleccion = '1' AND p.goles_local > p.goles_visitante) OR
                             (s.eleccion = 'X' AND p.goles_local = p.goles_visitante) OR
                             (s.eleccion = '2' AND p.goles_local < p.goles_visitante)
                        THEN 1 ELSE 0
                    END) AS aciertos,
+                   COUNT(s.id) AS total_selecciones,
                    q.finalizada
             FROM usuarios u
             LEFT JOIN quinielas q ON u.id = q.usuario_id
             LEFT JOIN selecciones s ON q.id = s.quiniela_id
-            LEFT JOIN partidos p ON s.partido_id = p.id
+            LEFT JOIN partidos p ON s.partido_id = p.id AND p.goles_local IS NOT NULL
             GROUP BY u.id
+            HAVING total_selecciones > 0
             ORDER BY aciertos DESC, u.nombre
         ''').fetchall()
         
@@ -764,48 +786,88 @@ def create_app():
         styles = getSampleStyleSheet()
         elements = []
         
-        title_style = ParagraphStyle('Title', parent=styles['Title'], fontSize=16, alignment=TA_CENTER, spaceAfter=3*mm)
-        elements.append(Paragraph("🏆 Leaderboard - Mundial Quiniela", title_style))
+        title_style = ParagraphStyle('Title', parent=styles['Title'], fontSize=18, alignment=TA_CENTER, spaceAfter=3*mm)
+        elements.append(Paragraph("🏆 Resultados del Mundial", title_style))
         
-        info_style = ParagraphStyle('Info', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER, spaceAfter=4*mm, textColor=colors.HexColor('#555555'))
+        info_style = ParagraphStyle('Info', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER, spaceAfter=6*mm, textColor=colors.HexColor('#555555'))
         elements.append(Paragraph(f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}", info_style))
-        elements.append(Spacer(1, 4*mm))
         
-        data = [['#', 'Usuario', 'Email', 'Selecciones', 'Aciertos', 'Estado']]
-        for i, r in enumerate(ranking, 1):
-            estado = '🔒 Finalizada' if r['finalizada'] else '✏️ En progreso'
-            data.append([
-                str(i),
-                r['nombre'],
-                r['email'],
-                str(r['total_selecciones']),
-                str(r['aciertos'] or 0),
-                estado
-            ])
+        # Section 1: Resultados de partidos
+        if partidos:
+            elements.append(Paragraph("<b>📊 Resultados de Partidos</b>", ParagraphStyle('Section', parent=styles['Heading2'], fontSize=14, spaceBefore=6*mm, spaceAfter=3*mm)))
+            
+            data = [['#', 'Fase', 'Fecha', 'Local', 'Goles', 'Visitante']]
+            for i, p in enumerate(partidos, 1):
+                resultado = f"{p['goles_local']} - {p['goles_visitante']}"
+                data.append([
+                    str(i),
+                    p['fase'],
+                    p['fecha'][:10],
+                    p['local'],
+                    resultado,
+                    p['visitante']
+                ])
+            
+            table = Table(data, colWidths=[10*mm, 25*mm, 22*mm, 35*mm, 20*mm, 35*mm])
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e94560')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('ALIGN', (3, 1), (3, -1), 'RIGHT'),
+                ('ALIGN', (5, 1), (5, -1), 'LEFT'),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            elements.append(table)
         
-        table = Table(data, colWidths=[10*mm, 35*mm, 50*mm, 25*mm, 20*mm, 30*mm])
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e94560')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('ALIGN', (1, 1), (2, -1), 'LEFT'),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ]))
-        elements.append(table)
+        # Section 2: Ranking de usuarios
+        if ranking:
+            elements.append(Spacer(1, 8*mm))
+            elements.append(Paragraph("<b>🏆 Ranking de Usuarios</b>", ParagraphStyle('Section2', parent=styles['Heading2'], fontSize=14, spaceBefore=6*mm, spaceAfter=3*mm)))
+            
+            data2 = [['#', 'Usuario', 'Selecciones', 'Aciertos', 'Estado']]
+            for i, r in enumerate(ranking, 1):
+                estado = '✅ Finalizada' if r['finalizada'] else '✏️ En progreso'
+                data2.append([
+                    str(i),
+                    r['nombre'],
+                    str(r['total_selecciones']),
+                    str(r['aciertos'] or 0),
+                    estado
+                ])
+            
+            table2 = Table(data2, colWidths=[10*mm, 50*mm, 30*mm, 25*mm, 35*mm])
+            table2.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4ade80')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#0a0a1a')),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('ALIGN', (1, 1), (1, -1), 'LEFT'),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            elements.append(table2)
+        
+        if not partidos and not ranking:
+            elements.append(Paragraph("No hay resultados de partidos cargados aún.", info_style))
         
         doc.build(elements)
         buffer.seek(0)
         
         response = make_response(buffer.read())
         response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = 'attachment; filename=leaderboard_mundial.pdf'
+        response.headers['Content-Disposition'] = 'attachment; filename=resultados_mundial.pdf'
         return response
 
     # Leaderboard chart (imagen)
