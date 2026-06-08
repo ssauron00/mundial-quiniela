@@ -9,6 +9,7 @@
     <table>
         <thead>
             <tr>
+                <th>#</th>
                 <th>Nombre</th>
                 <th>Email</th>
                 <th>Rol</th>
@@ -21,6 +22,7 @@
         <tbody>
             {% for u in usuarios %}
             <tr>
+                <td><strong>{{ loop.index }}</strong></td>
                 <td><strong>{{ u.nombre }}</strong></td>
                 <td>{{ u.email }}</td>
                 <td>
