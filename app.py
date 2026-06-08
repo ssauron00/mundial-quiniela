@@ -355,11 +355,12 @@ def create_app():
     @app.route('/admin/usuarios')
     @login_required
     @role_required('admin')
-    def admin_usuarios_list():
+    def admin_usuarios_list(self):
         db = get_db()
         usuarios = db.execute('''
             SELECT u.id, u.email, u.nombre, u.rol, u.activo,
-                   COUNT(s.id) AS total_selecciones
+                   COUNT(s.id) AS total_selecciones,
+                   q.finalizada AS quiniela_finalizada
             FROM usuarios u
             LEFT JOIN quinielas q ON u.id = q.usuario_id
             LEFT JOIN selecciones s ON q.id = s.quiniela_id
@@ -367,6 +368,108 @@ def create_app():
             ORDER BY u.nombre
         ''').fetchall()
         return render_template('admin/usuarios_list.html', usuarios=usuarios)
+
+    @app.route('/admin/usuarios/pdf/<int:id>')
+    @login_required
+    @role_required('admin')
+    def admin_usuarios_pdf(db, id):
+        """Generate PDF for a specific user's quiniela."""
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib import colors
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER
+        
+        db = self.get_db()
+        
+        # Get user info
+        usuario = db.execute('SELECT * FROM usuarios WHERE id = ?', (id,)).fetchone()
+        if not usuario:
+            flash('Usuario no encontrado.', 'danger')
+            return redirect(url_for('admin_usuarios_list'))
+        
+        # Get quiniela
+        quiniela = db.execute('SELECT * FROM quinielas WHERE usuario_id = ?', (id,)).fetchone()
+        
+        if not quiniela:
+            flash('El usuario no tiene quiniela.', 'warning')
+            return redirect(url_for('admin_usuarios_list'))
+        
+        # Get partidos with selecciones
+        partidos = db.execute('''
+            SELECT p.id, p.fase, p.fecha,
+                   el.nombre AS local,
+                   ev.nombre AS visitante,
+                   s.eleccion
+            FROM partidos p
+            JOIN equipos el ON p.equipo_local_id = el.id
+            JOIN equipos ev ON p.equipo_visitante_id = ev.id
+            LEFT JOIN selecciones s ON s.partido_id = p.id AND s.quiniela_id = ?
+            ORDER BY p.fecha
+        ''', (quiniela['id'],)).fetchall()
+        
+        # Build PDF
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter,
+                                leftMargin=20*mm, rightMargin=20*mm,
+                                topMargin=20*mm, bottomMargin=20*mm)
+        styles = getSampleStyleSheet()
+        elements = []
+        
+        title_style = ParagraphStyle('Title', parent=styles['Title'], fontSize=18, alignment=TA_CENTER, spaceAfter=4*mm)
+        elements.append(Paragraph("Mundial Quiniela - Quiniela de Usuario", title_style))
+        
+        info_style = ParagraphStyle('Info', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER, spaceAfter=2*mm, textColor=colors.HexColor('#555555'))
+        elements.append(Paragraph(f"Usuario: <b>{usuario['nombre']}</b>", info_style))
+        elements.append(Paragraph(f"Email: {usuario['email']}", info_style))
+        if quiniela['finalizada']:
+            elements.append(Paragraph(f"Estado: <b>Finalizada</b> - {quiniela['finalizada_en']}", info_style))
+        else:
+            elements.append(Paragraph("Estado: <i>En progreso</i>", info_style))
+        elements.append(Spacer(1, 6*mm))
+        
+        data = [['#', 'Fase', 'Fecha', 'Local', 'Visitante', 'Eleccion']]
+        for i, p in enumerate(partidos, 1):
+            eleccion = p['eleccion'] if p['eleccion'] else '-'
+            data.append([
+                str(i),
+                p['fase'],
+                p['fecha'][:16] if p['fecha'] else '-',
+                p['local'],
+                p['visitante'],
+                eleccion
+            ])
+        
+        table = Table(data, colWidths=[10*mm, 25*mm, 28*mm, 45*mm, 45*mm, 22*mm])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e94560')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (3, 1), (5, -1), 'LEFT'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ]))
+        elements.append(table)
+        
+        elements.append(Spacer(1, 8*mm))
+        from datetime import datetime
+        footer_style = ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, textColor=colors.HexColor('#999999'))
+        elements.append(Paragraph(f"Generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}", footer_style))
+        
+        doc.build(elements)
+        buffer.seek(0)
+        
+        response = make_response(buffer.read())
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=quiniela_{usuario["nombre"]}.pdf'
+        return response
 
     @app.route('/admin/usuarios/<int:id>/editar', methods=['GET', 'POST'])
     @login_required
@@ -570,7 +673,7 @@ def create_app():
     def leaderboard():
         db = get_db()
         ranking = db.execute('''
-            SELECT u.nombre, COUNT(s.id) AS aciertos
+            SELECT u.id, u.nombre, COUNT(s.id) AS aciertos
             FROM usuarios u
             JOIN quinielas q ON u.id = q.usuario_id
             JOIN selecciones s ON q.id = s.quiniela_id
@@ -582,6 +685,89 @@ def create_app():
             ORDER BY aciertos DESC, u.nombre
         ''').fetchall()
         return render_template('leaderboard/index.html', ranking=ranking)
+
+    # Leaderboard PDF - todos los usuarios con sus quinielas
+    @app.route('/leaderboard/pdf')
+    @login_required
+    def leaderboard_pdf():
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib import colors
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER
+        from datetime import datetime
+        
+        db = get_db()
+        
+        ranking = db.execute('''
+            SELECT u.id, u.nombre, u.email,
+                   COUNT(DISTINCT s.id) AS total_selecciones,
+                   SUM(CASE 
+                       WHEN (s.eleccion = '1' AND p.goles_local > p.goles_visitante) OR
+                            (s.eleccion = 'X' AND p.goles_local = p.goles_visitante) OR
+                            (s.eleccion = '2' AND p.goles_local < p.goles_visitante)
+                       THEN 1 ELSE 0
+                   END) AS aciertos,
+                   q.finalizada
+            FROM usuarios u
+            LEFT JOIN quinielas q ON u.id = q.usuario_id
+            LEFT JOIN selecciones s ON q.id = s.quiniela_id
+            LEFT JOIN partidos p ON s.partido_id = p.id
+            GROUP BY u.id
+            ORDER BY aciertos DESC, u.nombre
+        ''').fetchall()
+        
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter,
+                                leftMargin=15*mm, rightMargin=15*mm,
+                                topMargin=15*mm, bottomMargin=15*mm)
+        styles = getSampleStyleSheet()
+        elements = []
+        
+        title_style = ParagraphStyle('Title', parent=styles['Title'], fontSize=16, alignment=TA_CENTER, spaceAfter=3*mm)
+        elements.append(Paragraph("🏆 Leaderboard - Mundial Quiniela", title_style))
+        
+        info_style = ParagraphStyle('Info', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER, spaceAfter=4*mm, textColor=colors.HexColor('#555555'))
+        elements.append(Paragraph(f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}", info_style))
+        elements.append(Spacer(1, 4*mm))
+        
+        data = [['#', 'Usuario', 'Email', 'Selecciones', 'Aciertos', 'Estado']]
+        for i, r in enumerate(ranking, 1):
+            estado = '🔒 Finalizada' if r['finalizada'] else '✏️ En progreso'
+            data.append([
+                str(i),
+                r['nombre'],
+                r['email'],
+                str(r['total_selecciones']),
+                str(r['aciertos'] or 0),
+                estado
+            ])
+        
+        table = Table(data, colWidths=[10*mm, 35*mm, 50*mm, 25*mm, 20*mm, 30*mm])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e94560')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (1, 1), (2, -1), 'LEFT'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(table)
+        
+        doc.build(elements)
+        buffer.seek(0)
+        
+        response = make_response(buffer.read())
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = 'attachment; filename=leaderboard_mundial.pdf'
+        return response
 
     # Leaderboard chart (imagen)
     @app.route('/leaderboard/chart')
@@ -596,7 +782,7 @@ def create_app():
 
         db = get_db()
         ranking = db.execute('''
-            SELECT u.nombre, COUNT(s.id) AS aciertos
+            SELECT u.id, u.nombre, COUNT(s.id) AS aciertos
             FROM usuarios u
             JOIN quinielas q ON u.id = q.usuario_id
             JOIN selecciones s ON q.id = s.quiniela_id

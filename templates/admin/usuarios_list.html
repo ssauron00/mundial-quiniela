@@ -14,6 +14,7 @@
                 <th>Rol</th>
                 <th>Estado</th>
                 <th>Pronósticos</th>
+                <th>Quiniela</th>
                 <th>Acciones</th>
             </tr>
         </thead>
@@ -38,7 +39,19 @@
                 </td>
                 <td>{{ u.total_selecciones }}</td>
                 <td>
+                    {% if u.quiniela_finalizada %}
+                        <span style="color:#4ade80;font-weight:700;">🔒 Finalizada</span>
+                    {% elif u.total_selecciones > 0 %}
+                        <span style="color:#fbbf24;">✏️ En progreso</span>
+                    {% else %}
+                        <span style="color:#888;">- Sin empezar</span>
+                    {% endif %}
+                </td>
+                <td>
                     <a href="{{ url_for('admin_usuarios_editar', id=u.id) }}" class="btn btn-sm">Editar</a>
+                    {% if u.total_selecciones > 0 %}
+                    <a href="{{ url_for('admin_usuarios_pdf', id=u.id) }}" class="btn btn-sm" target="_blank">📄 PDF</a>
+                    {% endif %}
                     {% if u.id != session.usuario_id %}
                     <form method="POST" action="{{ url_for('admin_usuarios_eliminar', id=u.id) }}" style="display:inline;" onsubmit="return confirm('¿Eliminar este usuario?');">
                         <button type="submit" class="btn btn-sm btn-secondary" style="background:rgba(255,107,107,0.2);color:#ff6b6b;">Eliminar</button>

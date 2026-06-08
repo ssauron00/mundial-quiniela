@@ -4,9 +4,12 @@
 <div class="card">
     <div class="card-header">
         <h2>🏆 Leaderboard</h2>
-        {% if ranking %}
-        <a href="{{ url_for('leaderboard_chart') }}" class="btn btn-sm" target="_blank">📊 Ver Gráfica</a>
-        {% endif %}
+        <div style="display:flex;gap:0.5rem;">
+            {% if ranking %}
+            <a href="{{ url_for('leaderboard_pdf') }}" class="btn btn-sm" target="_blank">📄 PDF</a>
+            <a href="{{ url_for('leaderboard_chart') }}" class="btn btn-sm" target="_blank">📊 Gráfica</a>
+            {% endif %}
+        </div>
     </div>
     <p>Ranking de participantes por aciertos en sus pronósticos.</p>
 
@@ -17,6 +20,7 @@
                 <th>#</th>
                 <th>Usuario</th>
                 <th>Aciertos</th>
+                <th>PDF</th>
             </tr>
         </thead>
         <tbody>
@@ -25,6 +29,9 @@
                 <td>{{ loop.index }}</td>
                 <td>{{ r.nombre }}</td>
                 <td>{{ r.aciertos }}</td>
+                <td>
+                    <a href="{{ url_for('admin_usuarios_pdf', id=r.id) }}" class="btn btn-sm" target="_blank">📄 Ver</a>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
