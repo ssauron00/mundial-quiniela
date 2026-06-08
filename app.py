@@ -336,6 +336,44 @@ def create_app():
         flash('Quiniela limpiada. Puedes empezar de nuevo.', 'success')
         return redirect(url_for('quiniela_hacer'))
 
+    # Cambiar contraseña
+    @app.route('/cambiar-password', methods=['GET', 'POST'])
+    @login_required
+    def cambiar_password():
+        if request.method == 'POST':
+            current = request.form.get('current_password', '').strip()
+            new_pass = request.form.get('new_password', '').strip()
+            confirm = request.form.get('confirm_password', '').strip()
+            
+            if not current or not new_pass or not confirm:
+                flash('Todos los campos son obligatorios.', 'danger')
+                return render_template('cambiar_password.html')
+            
+            if new_pass != confirm:
+                flash('Las contraseñas nuevas no coinciden.', 'danger')
+                return render_template('cambiar_password.html')
+            
+            if len(new_pass) < 6:
+                flash('La contraseña debe tener al menos 6 caracteres.', 'danger')
+                return render_template('cambiar_password.html')
+            
+            db = get_db()
+            user = db.execute('SELECT * FROM usuarios WHERE id = ?', (session['usuario_id'],)).fetchone()
+            
+            if not check_password(current, user['password_hash']):
+                flash('La contraseña actual es incorrecta.', 'danger')
+                return render_template('cambiar_password.html')
+            
+            from werkzeug.security import generate_password_hash
+            new_hash = generate_password_hash(new_pass)
+            db.execute('UPDATE usuarios SET password_hash = ? WHERE id = ?', (new_hash, session['usuario_id']))
+            db.commit()
+            
+            flash('Contraseña cambiada exitosamente.', 'success')
+            return redirect(url_for('welcome'))
+        
+        return render_template('cambiar_password.html')
+
     # Registro de usuarios
     @app.route('/register', methods=['GET', 'POST'])
     def register():
