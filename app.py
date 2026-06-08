@@ -904,9 +904,17 @@ def create_app():
             ORDER BY p.fecha
         ''').fetchall()
         
-        # Get all users with their aciertos
+        # Get all users with their aciertos and puntaje
         ranking = db.execute('''
             SELECT u.id, u.nombre,
+                   SUM(CASE 
+                       WHEN (s.eleccion = '1' AND p.goles_local > p.goles_visitante) OR
+                            (s.eleccion = '2' AND p.goles_local < p.goles_visitante)
+                       THEN 3
+                       WHEN s.eleccion = 'X' AND p.goles_local = p.goles_visitante
+                       THEN 1
+                       ELSE 0
+                   END) AS puntaje,
                    SUM(CASE 
                        WHEN (s.eleccion = '1' AND p.goles_local > p.goles_visitante) OR
                             (s.eleccion = 'X' AND p.goles_local = p.goles_visitante) OR
@@ -921,7 +929,7 @@ def create_app():
             LEFT JOIN partidos p ON s.partido_id = p.id AND p.goles_local IS NOT NULL
             GROUP BY u.id
             HAVING total_selecciones > 0
-            ORDER BY aciertos DESC, u.nombre
+            ORDER BY puntaje DESC, aciertos DESC, u.nombre
         ''').fetchall()
         
         buffer = BytesIO()
@@ -976,7 +984,7 @@ def create_app():
             elements.append(Spacer(1, 8*mm))
             elements.append(Paragraph("<b>🏆 Ranking de Usuarios</b>", ParagraphStyle('Section2', parent=styles['Heading2'], fontSize=14, spaceBefore=6*mm, spaceAfter=3*mm)))
             
-            data2 = [['#', 'Usuario', 'Selecciones', 'Aciertos', 'Estado']]
+            data2 = [['#', 'Usuario', 'Selecciones', 'Aciertos', 'Puntaje', 'Estado']]
             for i, r in enumerate(ranking, 1):
                 estado = '✅ Finalizada' if r['finalizada'] else '✏️ En progreso'
                 data2.append([
@@ -984,10 +992,11 @@ def create_app():
                     r['nombre'],
                     str(r['total_selecciones']),
                     str(r['aciertos'] or 0),
+                    str(r['puntaje'] or 0),
                     estado
                 ])
             
-            table2 = Table(data2, colWidths=[10*mm, 50*mm, 30*mm, 25*mm, 35*mm])
+            table2 = Table(data2, colWidths=[8*mm, 40*mm, 22*mm, 18*mm, 18*mm, 30*mm])
             table2.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4ade80')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#0a0a1a')),
