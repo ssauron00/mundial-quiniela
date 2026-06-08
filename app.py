@@ -355,7 +355,7 @@ def create_app():
     @app.route('/admin/usuarios')
     @login_required
     @role_required('admin')
-    def admin_usuarios_list(self):
+    def admin_usuarios_list():
         db = get_db()
         usuarios = db.execute('''
             SELECT u.id, u.email, u.nombre, u.rol, u.activo,
@@ -372,8 +372,9 @@ def create_app():
     @app.route('/admin/usuarios/pdf/<int:id>')
     @login_required
     @role_required('admin')
-    def admin_usuarios_pdf(db, id):
+    def admin_usuarios_pdf(id):
         """Generate PDF for a specific user's quiniela."""
+        db = get_db()
         from reportlab.lib.pagesizes import letter
         from reportlab.lib import colors
         from reportlab.lib.units import mm
