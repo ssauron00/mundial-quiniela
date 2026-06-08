@@ -186,6 +186,69 @@ def create_app():
         equipos = db.execute('SELECT id, nombre FROM equipos ORDER BY nombre').fetchall()
         return render_template('partidos/form.html', equipos=equipos, partido=None)
 
+    @app.route('/partidos/pdf')
+    @login_required
+    @role_required('admin')
+    def partidos_pdf():
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib import colors
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER
+        from datetime import datetime
+        
+        db = get_db()
+        partidos = db.execute('''
+            SELECT p.fase, p.fecha, p.goles_local, p.goles_visitante,
+                   el.nombre AS local, ev.nombre AS visitante
+            FROM partidos p
+            JOIN equipos el ON p.equipo_local_id = el.id
+            JOIN equipos ev ON p.equipo_visitante_id = ev.id
+            ORDER BY p.fecha
+        ''').fetchall()
+        
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter,
+                                leftMargin=15*mm, rightMargin=15*mm,
+                                topMargin=15*mm, bottomMargin=15*mm)
+        styles = getSampleStyleSheet()
+        elements = []
+        
+        title_style = ParagraphStyle('Title', parent=styles['Title'], fontSize=18, alignment=TA_CENTER, spaceAfter=3*mm)
+        elements.append(Paragraph("⚽ Lista de Partidos - Mundial Quiniela", title_style))
+        info_style = ParagraphStyle('Info', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER, spaceAfter=6*mm, textColor=colors.HexColor('#555555'))
+        elements.append(Paragraph(f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}", info_style))
+        
+        data = [['#', 'Fase', 'Fecha', 'Local', 'Visitante', 'Resultado']]
+        for i, p in enumerate(partidos, 1):
+            resultado = f"{p['goles_local']} - {p['goles_visitante']}" if p['goles_local'] is not None else 'Pendiente'
+            data.append([str(i), p['fase'], p['fecha'][:16], p['local'], p['visitante'], resultado])
+        
+        table = Table(data, colWidths=[10*mm, 25*mm, 28*mm, 40*mm, 40*mm, 25*mm])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e94560')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (3, 1), (4, -1), 'LEFT'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ]))
+        elements.append(table)
+        
+        doc.build(elements)
+        buffer.seek(0)
+        response = make_response(buffer.read())
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = 'attachment; filename=partidos_mundial.pdf'
+        return response
+
     @app.route('/partidos/<int:id>/editar', methods=['GET', 'POST'])
     @login_required
     @role_required('admin')
