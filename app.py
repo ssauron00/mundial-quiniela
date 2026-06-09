@@ -1037,23 +1037,30 @@ def create_app():
 
         db = get_db()
         ranking = db.execute('''
-            SELECT u.id, u.nombre, COUNT(s.id) AS aciertos
+            SELECT u.id, u.nombre,
+                   SUM(CASE 
+                       WHEN (s.eleccion = '1' AND p.goles_local > p.goles_visitante) OR
+                            (s.eleccion = '2' AND p.goles_local < p.goles_visitante)
+                       THEN 3
+                       WHEN s.eleccion = 'X' AND p.goles_local = p.goles_visitante
+                       THEN 1
+                       ELSE 0
+                   END) AS puntaje
             FROM usuarios u
             JOIN quinielas q ON u.id = q.usuario_id
             JOIN selecciones s ON q.id = s.quiniela_id
             JOIN partidos p ON s.partido_id = p.id
-            WHERE (s.eleccion = '1' AND p.goles_local > p.goles_visitante)
-               OR (s.eleccion = 'X' AND p.goles_local = p.goles_visitante)
-               OR (s.eleccion = '2' AND p.goles_local < p.goles_visitante)
+            WHERE p.goles_local IS NOT NULL
             GROUP BY u.id
-            ORDER BY aciertos DESC, u.nombre
+            HAVING puntaje > 0
+            ORDER BY puntaje DESC, u.nombre
         ''').fetchall()
 
         if not ranking:
             return "Sin datos suficientes para la gráfica", 404
 
         nombres = [r['nombre'] for r in ranking]
-        aciertos = [r['aciertos'] for r in ranking]
+        puntajes = [r['puntaje'] for r in ranking]
 
         # Colores para las barras (oro, plata, bronce, resto)
         colors = []
@@ -1068,16 +1075,16 @@ def create_app():
                 colors.append('#e94560')  # rojo tema
 
         fig, ax = plt.subplots(figsize=(10, max(4, len(nombres) * 0.5)))
-        bars = ax.barh(range(len(nombres)), aciertos, color=colors, height=0.6, edgecolor='white', linewidth=0.5)
+        bars = ax.barh(range(len(nombres)), puntajes, color=colors, height=0.6, edgecolor='white', linewidth=0.5)
 
         ax.set_yticks(range(len(nombres)))
         ax.set_yticklabels(nombres, fontsize=9)
-        ax.set_xlabel('Aciertos', fontsize=10)
-        ax.set_title('🏆 Leaderboard - Aciertos por Usuario', fontsize=14, fontweight='bold', pad=15)
+        ax.set_xlabel('Puntaje', fontsize=10)
+        ax.set_title('🏆 Leaderboard - Puntaje por Usuario', fontsize=14, fontweight='bold', pad=15)
         ax.invert_yaxis()
 
         # Agregar valores en las barras
-        for bar, val in zip(bars, aciertos):
+        for bar, val in zip(bars, puntajes):
             ax.text(bar.get_width() + 0.3, bar.get_y() + bar.get_height()/2,
                     str(val), va='center', fontsize=9, fontweight='bold')
 
